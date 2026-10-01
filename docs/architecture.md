@@ -27,3 +27,11 @@ Protocol state is deliberately carried between individual client and server call
 Managed validation rejects empty required inputs and unsafe custom KSF values before invoking native code. Native protocol failures are converted into a failed operation. Server login additionally exposes an infrastructure exception through an output parameter so applications can distinguish internal diagnostics from externally safe authentication responses.
 
 When modifying this boundary, test invalid inputs, incorrect passwords, identifier mismatches, KSF mismatches, native failures, and native resource cleanup.
+
+## ABI evolution
+
+The current ABI is retained for compatibility with released native assets. Its `char*` inputs
+require a readable NUL-terminated buffer, a limitation of the original contract. A future
+versioned ABI must use `(pointer, length)` input pairs, opaque result handles, explicit status
+codes, and a status-to-public-error mapping in .NET. New functionality belongs on that versioned
+surface rather than changing existing symbols in place.

@@ -33,6 +33,20 @@
 
         protected KSFConfig() { }
 
+        /// <summary>
+        /// Creates the RFC draft profile. It can allocate about 2 GiB per operation; callers must
+        /// opt in explicitly so untrusted request configuration cannot silently select it.
+        /// </summary>
+        public static KSFConfig CreateRfcDraftRecommended(bool allowHighMemoryProfile)
+        {
+            if (!allowHighMemoryProfile)
+            {
+                throw new InvalidOperationException("The RFC draft KSF profile requires an explicit high-memory opt-in.");
+            }
+
+            return new KSFConfig { Type = KSFConfigType.RfcDraftRecommended };
+        }
+
         public static KSFConfig Create(KSFConfigType type, int? iterations = null, int? memory = null, int? parallelism = null)
         {
             if (type == KSFConfigType.Custom)

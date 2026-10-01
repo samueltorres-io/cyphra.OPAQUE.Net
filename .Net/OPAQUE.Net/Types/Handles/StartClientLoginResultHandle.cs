@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace OPAQUE.Net.Types.Handles
 {
-    internal class StartClientLoginResultHandle : BaseHandle<StartClientLoginResult>
+    internal sealed class StartClientLoginResultHandle : BaseHandle<StartClientLoginResult>
     {
         protected override void DoRelease()
         {

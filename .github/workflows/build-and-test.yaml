@@ -105,12 +105,16 @@ jobs:
       - name: Install pinned Rust toolchain
         run: |
           rustup show active-toolchain || rustup toolchain install
+          rustup component add rustfmt clippy
           rustup target add "${{ matrix.target }}"
           rustc --version --verbose
           cargo --version
 
-      - name: Test Rust crate
-        run: cargo test --locked
+      - name: Lint and test Rust crate
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo test --all-features --locked
 
       - name: Cache cargo registry and build directory
         uses: actions/cache@v4

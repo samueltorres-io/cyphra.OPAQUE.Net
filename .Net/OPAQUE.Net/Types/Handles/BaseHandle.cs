@@ -2,7 +2,7 @@
 
 namespace OPAQUE.Net.Types.Handles
 {
-    abstract public class BaseHandle<T> : SafeHandle
+    internal abstract class BaseHandle<T> : SafeHandle
     {
         public override bool IsInvalid => this.handle == IntPtr.Zero;
 
@@ -10,10 +10,14 @@ namespace OPAQUE.Net.Types.Handles
 
         public T? GetAndRelease()
         {
-            T? value = GetValue();
-            Dispose();
-
-            return value;
+            try
+            {
+                return GetValue();
+            }
+            finally
+            {
+                Dispose();
+            }
         }
 
         protected override bool ReleaseHandle()
