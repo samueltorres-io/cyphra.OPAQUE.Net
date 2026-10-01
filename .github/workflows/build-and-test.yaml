@@ -132,9 +132,9 @@ jobs:
         if: matrix.zig_target != ''
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet --user ziglang
+          python3 -m pip install --quiet --user 'ziglang==0.13.0'
           if ! command -v cargo-zigbuild >/dev/null 2>&1; then
-            cargo install --locked cargo-zigbuild
+            cargo install --locked cargo-zigbuild --version 0.20.1
           fi
           # Not `cargo zigbuild --version`: that routes --version into the zigbuild subcommand,
           # which rejects it. Check the thing most likely to actually be broken instead — that zig

@@ -20,8 +20,12 @@ permissions:
   contents: read
 
 jobs:
+  build_native:
+    uses: ./.github/workflows/build-and-test.yaml
+
   create_nuget:
     runs-on: ubuntu-latest
+    needs: build_native
     steps:
     - uses: actions/checkout@v4
       with:
@@ -31,6 +35,26 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+
+    # Release packaging must use the native libraries built from this exact revision, never
+    # binaries left over in the checkout. The reusable build workflow compiles and tests every RID.
+    - name: Download freshly built native libraries
+      uses: actions/download-artifact@v4
+      with:
+        pattern: native-*
+        path: native-artifacts
+        merge-multiple: false
+
+    - name: Stage freshly built native libraries
+      shell: bash
+      run: |
+        set -euo pipefail
+        cp native-artifacts/native-linux-x64/libopaque.so .Net/OPAQUE.Net/libopaque.so
+        cp native-artifacts/native-linux-arm64/libopaque-linux-arm64.so .Net/OPAQUE.Net/libopaque-linux-arm64.so
+        cp native-artifacts/native-win-x64/opaque.dll .Net/OPAQUE.Net/opaque.dll
+        cp native-artifacts/native-win-arm64/opaque-arm64.dll .Net/OPAQUE.Net/opaque-arm64.dll
+        cp native-artifacts/native-osx-x64/libopaque-x64.dylib .Net/OPAQUE.Net/libopaque-x64.dylib
+        cp native-artifacts/native-osx-arm64/libopaque.dylib .Net/OPAQUE.Net/libopaque.dylib
 
     # The native libraries are committed to the repo, built and tested by the Native workflow.
     # OPAQUE.Net.csproj fails the pack if any of them is missing.
