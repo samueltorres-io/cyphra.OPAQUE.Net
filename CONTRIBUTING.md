@@ -1,66 +1,87 @@
-# Contributing
+# Contributing to Cyphra OPAQUE.Net
 
-Contributions are always welcome, no matter how large or small!
+Thank you for helping improve this security-focused fork of [Vaultic-LLC/OPAQUE.Net](https://github.com/Vaultic-LLC/OPAQUE.Net). Contributions are welcome, especially tests, documentation, portability fixes, and carefully reviewed hardening changes.
 
-We want this community to be friendly and respectful to each other. Please follow it in all your interactions with the project.
+## Before you start
 
-## Development workflow
+Read the project documentation in [`docs/`](docs/README.md), especially:
 
-Prerequisites:
+- [`docs/architecture.md`](docs/architecture.md) for the managed/native boundary;
+- [`docs/security.md`](docs/security.md) for vulnerability reporting and security expectations;
+- [`docs/building.md`](docs/building.md) for the native build and test workflow.
 
-- pnpm
-- rust toolchain
-- rust target `wasm32-unknown-unknown`
-- wasm-bindgen
+Please search existing issues and pull requests before starting larger work. For a substantial API, protocol, or packaging change, open an issue first so the design can be discussed before implementation.
 
-You can install wasm-bindgen with:
+## Development requirements
 
-```sh
-cargo install wasm-bindgen-cli
-```
+- .NET SDK 8 or later;
+- Rust and `rustup`, using the version pinned by `rust-toolchain.toml`;
+- the Rust targets required for the platform you are building;
+- a native library for the host runtime, or a build of the Rust library as described in [`docs/building.md`](docs/building.md).
 
-The `wasm32-unknown-unknown` target can be installed with:
+The repository contains the managed wrapper in `.Net/OPAQUE.Net`, the Rust implementation and C ABI in `src/`, and MSTest coverage in `.Net/Test`.
 
-```sh
-rustup target add wasm32-unknown-unknown
-```
+## Local workflow
 
-To run the build you can run
+Run the Rust tests:
 
 ```sh
-pnpm install
-pnpm build
+cargo test --locked
 ```
 
-## Tests
-
-To run the tests you can run
+Run the .NET tests:
 
 ```sh
-pnpm test
+dotnet test .Net/Test/Test.csproj --configuration Release
 ```
 
-## End-to-end tests
-
-To run the end-to-end tests you can run
+Build the package locally:
 
 ```sh
-cd examples/client-simple-webpack
-pnpm test:e2e
+dotnet pack .Net/OPAQUE.Net/OPAQUE.Net.csproj --configuration Release
 ```
 
-## Versioning
+Before opening a pull request, run the relevant tests on every platform affected by the change. Do not commit files from `bin/`, `obj/`, or `target/`.
 
-Is managed via Changesets and the Github CI. This means every change should also include a changeset which can be created running:
+## Security-sensitive changes
 
-```bash
-npx changeset
+Treat the following as security-sensitive: password or identifier handling, protocol state transitions, Argon2id parameters, random number generation, serialization, FFI signatures, `DllImport` declarations, `SafeHandle` ownership, native library loading, and package runtime assets.
+
+For these changes:
+
+1. Explain the threat or failure mode in the pull request.
+2. Add a regression test that fails before the change.
+3. Keep the managed and native sides in sync.
+4. Avoid logging passwords, registration records, session keys, or private server setup values.
+5. Document compatibility and migration impact.
+
+Never include real passwords, production credentials, private keys, registration records, or session keys in issues, tests, commits, or pull requests.
+
+## Pull requests
+
+Use a focused branch and a clear title. A good pull request includes:
+
+- what changed and why;
+- the security or compatibility impact;
+- tests executed and their results;
+- platform/runtime coverage when native code or binaries are involved;
+- documentation updates when behavior or public API changes.
+
+Keep unrelated formatting or dependency changes out of the same pull request. Reviewers should be able to trace each behavior change to a test or an explicit design decision.
+
+The `Build and test` GitHub Actions workflow is the required CI gate for pull requests into `main`. The `publish` workflow is reserved for creating and publishing NuGet packages after a release is prepared.
+
+## Commits and releases
+
+Use imperative, descriptive commit messages, for example:
+
+```text
+Harden native input validation
+Document the login flow
 ```
 
-You can bump a version running the `version` action here: https://github.com/serenity-kit/opaque/actions/workflows/release.yml
+Do not change package versions or publish releases in a normal feature pull request unless the change is specifically part of a release task. Never publish a package from a local build containing unreviewed native binaries.
 
-## Publish
+## Code of conduct
 
-Is managed via the Github CI
-
-You can publish running the `publish` action here: https://github.com/serenity-kit/opaque/actions/workflows/release.yml
+Be respectful, precise, and constructive. Security discussions should focus on reproducible behavior, impact, and remediation rather than blame.
