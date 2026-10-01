@@ -8,12 +8,12 @@
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <PackageTags>Opaque, library</PackageTags>
-    <PackageId>Vaultic.OPAQUE.Net</PackageId>
-    <Title>Vaultic.OPAQUE.Net</Title>
-    <Authors>Tyler Wanta</Authors>
-    <Company>Vaultic</Company>
-    <Description>Opaque protocal implementation</Description>
-    <RepositoryUrl>https://github.com/Vaultic-LLC/OPAQUE.Net</RepositoryUrl>
+    <PackageId>Cyphra.OPAQUE.Net</PackageId>
+    <Title>Cyphra OPAQUE.Net</Title>
+    <Authors>Cyphra contributors</Authors>
+    <Company>Cyphra</Company>
+    <Description>OPAQUE protocol implementation for .NET</Description>
+    <RepositoryUrl>https://github.com/samueltorres-io/cyphra.OPAQUE.Net</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <!--
