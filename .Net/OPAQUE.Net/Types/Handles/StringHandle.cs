@@ -3,7 +3,7 @@ using System.Text;
 
 namespace OPAQUE.Net.Types.Handles
 {
-    public class StringHandle : BaseHandle<string>
+    internal sealed class StringHandle : BaseHandle<string>
     {
         private const int MaximumNativeStringLength = 64 * 1024;
         public StringHandle() : base() { }

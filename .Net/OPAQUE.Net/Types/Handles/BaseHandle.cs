@@ -2,7 +2,7 @@
 
 namespace OPAQUE.Net.Types.Handles
 {
-    abstract public class BaseHandle<T> : SafeHandle
+    internal abstract class BaseHandle<T> : SafeHandle
     {
         public override bool IsInvalid => this.handle == IntPtr.Zero;
 

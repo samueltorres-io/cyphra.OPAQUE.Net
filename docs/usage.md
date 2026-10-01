@@ -99,7 +99,7 @@ The default `KSFConfig` is memory-constrained. Applications can select the RFC d
 ```csharp
 using OPAQUE.Net.Types.Parameters;
 
-var recommended = KSFConfig.Create(KSFConfigType.RfcDraftRecommended);
+var recommended = KSFConfig.CreateRfcDraftRecommended(allowHighMemoryProfile: true);
 var custom = KSFConfig.Create(
     KSFConfigType.Custom,
     iterations: 1,

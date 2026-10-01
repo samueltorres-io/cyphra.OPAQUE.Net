@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace OPAQUE.Net.Types.Handles
 {
-    internal class FinishClientRegistrationResultHandle : BaseHandle<FinishClientRegistrationResult>
+    internal sealed class FinishClientRegistrationResultHandle : BaseHandle<FinishClientRegistrationResult>
     {
         protected override void DoRelease()
         {
