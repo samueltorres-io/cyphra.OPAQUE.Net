@@ -10,10 +10,14 @@ namespace OPAQUE.Net.Types.Handles
 
         public T? GetAndRelease()
         {
-            T? value = GetValue();
-            Dispose();
-
-            return value;
+            try
+            {
+                return GetValue();
+            }
+            finally
+            {
+                Dispose();
+            }
         }
 
         protected override bool ReleaseHandle()

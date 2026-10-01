@@ -783,6 +783,8 @@ mod tests {
         assert!(ffi_string(std::ptr::null()).is_err());
         let invalid = [0xff_u8, 0];
         assert!(ffi_string(invalid.as_ptr() as *const c_char).is_err());
+        let unterminated = vec![b'x'; csharp::MAX_FFI_STRING_LEN + 1];
+        assert!(ffi_string(unterminated.as_ptr() as *const c_char).is_err());
     }
 
     #[test]
@@ -798,5 +800,13 @@ mod tests {
         assert!(!result.is_null());
         types::free_start_client_login_result(result);
         types::free_start_client_login_result(result);
+    }
+
+    #[test]
+    fn string_handles_ignore_double_free() {
+        let handle = csharp::rust_string_to_csharp_string_handle("test".to_owned());
+        assert!(!handle.is_null());
+        csharp::free_string(handle);
+        csharp::free_string(handle);
     }
 }
