@@ -5,6 +5,7 @@ namespace OPAQUE.Net.Types.Handles
 {
     public class StringHandle : BaseHandle<string>
     {
+        private const int MaximumNativeStringLength = 64 * 1024;
         public StringHandle() : base() { }
 
         protected override void DoRelease()
@@ -14,16 +15,26 @@ namespace OPAQUE.Net.Types.Handles
 
         protected override string GetValue()
         {
+            if (IsInvalid)
+            {
+                return string.Empty;
+            }
+
             int len = 0;
-            while (Marshal.ReadByte(handle, len) != 0)
+            while (len < MaximumNativeStringLength && Marshal.ReadByte(handle, len) != 0)
             {
                 ++len;
+            }
+
+            if (len == MaximumNativeStringLength)
+            {
+                throw new InvalidOperationException("Native string is not NUL-terminated within the supported maximum length.");
             }
 
             byte[] buffer = new byte[len];
             Marshal.Copy(handle, buffer, 0, buffer.Length);
 
-            return Encoding.UTF8.GetString(buffer);
+            return new UTF8Encoding(false, true).GetString(buffer);
         }
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]

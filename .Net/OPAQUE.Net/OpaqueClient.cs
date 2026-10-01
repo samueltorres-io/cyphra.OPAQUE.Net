@@ -20,6 +20,7 @@ namespace OPAQUE.Net
         public bool StartRegistration(string password, out StartClientRegistrationResult? result)
         {
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
+            StringParamIsEmptyException.ThrowIfLongerThan(password, StringParamIsEmptyException.MaximumPasswordLength, nameof(password));
 
             result = FunctionHelper.TryExecute(() => start_client_registration(password))?.GetAndRelease();
             return result != null;
@@ -55,6 +56,11 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
             StringParamIsEmptyException.ThrowIfEmpty(registrationResponse, nameof(registrationResponse));
             StringParamIsEmptyException.ThrowIfEmpty(clientRegistrationState, nameof(clientRegistrationState));
+            StringParamIsEmptyException.ThrowIfLongerThan(password, StringParamIsEmptyException.MaximumPasswordLength, nameof(password));
+            StringParamIsEmptyException.ThrowIfLongerThan(registrationResponse, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(registrationResponse));
+            StringParamIsEmptyException.ThrowIfLongerThan(clientRegistrationState, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(clientRegistrationState));
+            StringParamIsEmptyException.ThrowIfLongerThan(clientIdentifier, StringParamIsEmptyException.MaximumIdentifierLength, nameof(clientIdentifier));
+            StringParamIsEmptyException.ThrowIfLongerThan(serverIdentifier, StringParamIsEmptyException.MaximumIdentifierLength, nameof(serverIdentifier));
 
             config ??= KSFConfig.Create(KSFConfigType.MemoryConstrained);
 
@@ -73,6 +79,7 @@ namespace OPAQUE.Net
         public bool StartLogin(string password, out StartClientLoginResult? result)
         {
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
+            StringParamIsEmptyException.ThrowIfLongerThan(password, StringParamIsEmptyException.MaximumPasswordLength, nameof(password));
 
             result = FunctionHelper.TryExecute(() => start_client_login(password))?.GetAndRelease();
             return result != null;
@@ -108,6 +115,11 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(clientLoginState, nameof(clientLoginState));
             StringParamIsEmptyException.ThrowIfEmpty(serverLoginResponse, nameof(serverLoginResponse));
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
+            StringParamIsEmptyException.ThrowIfLongerThan(clientLoginState, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(clientLoginState));
+            StringParamIsEmptyException.ThrowIfLongerThan(serverLoginResponse, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(serverLoginResponse));
+            StringParamIsEmptyException.ThrowIfLongerThan(password, StringParamIsEmptyException.MaximumPasswordLength, nameof(password));
+            StringParamIsEmptyException.ThrowIfLongerThan(clientIdentifier, StringParamIsEmptyException.MaximumIdentifierLength, nameof(clientIdentifier));
+            StringParamIsEmptyException.ThrowIfLongerThan(serverIdentifier, StringParamIsEmptyException.MaximumIdentifierLength, nameof(serverIdentifier));
 
             config ??= KSFConfig.Create(KSFConfigType.MemoryConstrained);
 
@@ -118,17 +130,17 @@ namespace OPAQUE.Net
         }
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StartClientRegistrationResultHandle? start_client_registration(string password);
+        private static extern StartClientRegistrationResultHandle? start_client_registration([MarshalAs(UnmanagedType.LPUTF8Str)] string password);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern FinishClientRegistrationResultHandle finish_client_registration(string password, string registrationResponse, 
-            string clientRegistrationState, string? clientIdentifier, string? serverIdentifier, string configType, string iterations, string memory, string parallelism);
+        private static extern FinishClientRegistrationResultHandle finish_client_registration([MarshalAs(UnmanagedType.LPUTF8Str)] string password, [MarshalAs(UnmanagedType.LPUTF8Str)] string registrationResponse,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string clientRegistrationState, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StartClientLoginResultHandle start_client_login(string password);
+        private static extern StartClientLoginResultHandle start_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string password);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern FinishClientLoginResultHandler? finish_client_login(string clientLoginState, string serverLoginResponse, string password, 
-            string? clientIdentifier, string? serverIdentifier, string configType, string iterations, string memory, string parallelism);
+        private static extern FinishClientLoginResultHandler? finish_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string clientLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginResponse, [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
     }
 }

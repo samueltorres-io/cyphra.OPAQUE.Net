@@ -8,7 +8,7 @@ Cyphra OPAQUE.Net has three layers:
 
 ## Native boundary
 
-The C# wrapper calls the native library with `DllImport("opaque", CallingConvention = CallingConvention.Cdecl)`. Native strings are returned through `SafeHandle`-based wrappers and released by the matching Rust functions. Any change to an exported function, string encoding, ownership rule, or result layout must update both sides and include tests.
+The C# wrapper calls the native library with `DllImport("opaque", CallingConvention = CallingConvention.Cdecl)`. Native strings are returned through `SafeHandle`-based wrappers and released by the matching Rust functions. Input strings must be valid UTF-8, NUL-terminated values no larger than 64 KiB; passwords and identifiers have a 1 KiB limit. `null`, invalid UTF-8, oversized values, and null result handles fail the operation instead of being interpreted as empty strings. Any change to an exported function, string encoding, ownership rule, or result layout must update both sides and include tests.
 
 The package stores platform-specific binaries under `runtimes/<rid>/native/`. The .NET project selects the binary matching the host runtime identifier and maps repository-specific filenames back to the name expected by P/Invoke.
 

@@ -45,7 +45,7 @@ namespace Test
             serverSetup = serverSecret!;
             registrationRecord = finishRegistrationResult!.RegistrationRecord;
             exportKey = finishRegistrationResult.ExportKey;
-            serverStaticPublicKey = finishRegistrationResult.ServerStaicPublicKey;
+            serverStaticPublicKey = finishRegistrationResult.ServerStaticPublicKey;
         }
 
         [TestMethod]

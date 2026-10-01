@@ -2,6 +2,66 @@ use crate::csharp;
 use argon2::Argon2;
 use libc::c_char;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+use zeroize::Zeroizing;
+
+static LIVE_RESULT_HANDLES: OnceLock<Mutex<HashSet<usize>>> = OnceLock::new();
+
+fn live_result_handles() -> &'static Mutex<HashSet<usize>> {
+    LIVE_RESULT_HANDLES.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn into_result_handle<T>(value: T) -> *mut T {
+    let ptr = Box::into_raw(Box::new(value));
+    if let Ok(mut handles) = live_result_handles().lock() {
+        handles.insert(ptr as usize);
+        ptr
+    } else {
+        // A poisoned registry is safer than releasing an untracked allocation to C.
+        unsafe { drop(Box::from_raw(ptr)) };
+        std::ptr::null_mut()
+    }
+}
+
+fn release_result_handle<T>(ptr: *mut T) {
+    if ptr.is_null() {
+        return;
+    }
+    let owned = live_result_handles()
+        .lock()
+        .map(|mut handles| handles.remove(&(ptr as usize)))
+        .unwrap_or(false);
+    if owned {
+        let _ = csharp::ffi_boundary(|| unsafe { drop(Box::from_raw(ptr)) }, ());
+    }
+}
+
+fn with_live_result_handle<T, R>(ptr: *mut T, action: impl FnOnce(&T) -> R) -> Option<R> {
+    if ptr.is_null() {
+        return None;
+    }
+    let handles = live_result_handles().lock().ok()?;
+    if !handles.contains(&(ptr as usize)) {
+        return None;
+    }
+    // The registry lock is held until `action` returns, preventing concurrent release.
+    Some(action(unsafe { &*ptr }))
+}
+
+macro_rules! result_string {
+    ($ptr:expr, $field:ident) => {
+        csharp::ffi_boundary(
+            || {
+                with_live_result_handle($ptr, |result| {
+                    csharp::rust_string_to_csharp_string_handle(result.$field.clone())
+                })
+                .unwrap_or(std::ptr::null_mut())
+            },
+            std::ptr::null_mut(),
+        )
+    };
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CustomIdentifiers {
@@ -75,24 +135,14 @@ pub struct StartServerLoginResult {
 pub extern "C" fn get_start_server_login_response_state(
     ptr: *mut StartServerLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.server_login_state.clone())
+    result_string!(ptr, server_login_state)
 }
 
 #[no_mangle]
 pub extern "C" fn get_start_server_login_response_response(
     ptr: *mut StartServerLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.login_response.clone())
+    result_string!(ptr, login_response)
 }
 
 #[no_mangle]
@@ -101,9 +151,7 @@ pub extern "C" fn free_start_server_login_result(ptr: *mut StartServerLoginResul
         return;
     }
 
-    unsafe {
-        drop(Box::from_raw(ptr));
-    }
+    release_result_handle(ptr);
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -126,24 +174,14 @@ pub struct StartClientLoginResult {
 pub extern "C" fn get_start_client_login_result_state(
     ptr: *mut StartClientLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.client_login_state.clone())
+    result_string!(ptr, client_login_state)
 }
 
 #[no_mangle]
 pub extern "C" fn get_start_client_login_result_request(
     ptr: *mut StartClientLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.start_login_request.clone())
+    result_string!(ptr, start_login_request)
 }
 
 #[no_mangle]
@@ -152,20 +190,15 @@ pub extern "C" fn free_start_client_login_result(ptr: *mut StartClientLoginResul
         return;
     }
 
-    unsafe {
-        drop(Box::from_raw(ptr));
-    }
+    release_result_handle(ptr);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct FinishClientLoginParams {
-    #[serde(rename = "clientLoginState")]
     pub client_login_state: String,
-    #[serde(rename = "loginResponse")]
     pub login_response: String,
-    pub password: String,
+    pub password: Zeroizing<String>,
     pub identifiers: Option<CustomIdentifiers>,
-    #[serde(rename = "keyStretchingConfig")]
     pub key_stretching_function_config: KeyStretchingFunctionConfig,
 }
 
@@ -185,48 +218,28 @@ pub struct FinishClientLoginResult {
 pub extern "C" fn get_finish_client_login_result_request(
     ptr: *mut FinishClientLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.finish_login_request.clone())
+    result_string!(ptr, finish_login_request)
 }
 
 #[no_mangle]
 pub extern "C" fn get_finish_client_login_result_session_key(
     ptr: *mut FinishClientLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.session_key.clone())
+    result_string!(ptr, session_key)
 }
 
 #[no_mangle]
 pub extern "C" fn get_finish_client_login_result_export_key(
     ptr: *mut FinishClientLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.export_key.clone())
+    result_string!(ptr, export_key)
 }
 
 #[no_mangle]
 pub extern "C" fn get_finish_client_login_result_public_key(
     ptr: *mut FinishClientLoginResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.server_static_public_key.clone())
+    result_string!(ptr, server_static_public_key)
 }
 
 #[no_mangle]
@@ -235,9 +248,7 @@ pub extern "C" fn free_finish_client_login_result(ptr: *mut FinishClientLoginRes
         return;
     }
 
-    unsafe {
-        drop(Box::from_raw(ptr));
-    }
+    release_result_handle(ptr);
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -252,24 +263,14 @@ pub struct StartClientRegistrationResult {
 pub extern "C" fn get_start_client_registration_result_state(
     ptr: *mut StartClientRegistrationResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.client_registration_state.clone())
+    result_string!(ptr, client_registration_state)
 }
 
 #[no_mangle]
 pub extern "C" fn get_start_client_registration_result_request(
     ptr: *mut StartClientRegistrationResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.registration_request.clone())
+    result_string!(ptr, registration_request)
 }
 
 #[no_mangle]
@@ -278,20 +279,15 @@ pub extern "C" fn free_start_client_registration_result(ptr: *mut StartClientReg
         return;
     }
 
-    unsafe {
-        drop(Box::from_raw(ptr));
-    }
+    release_result_handle(ptr);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct FinishClientRegistrationParams {
-    pub password: String,
-    #[serde(rename = "registrationResponse")]
+    pub password: Zeroizing<String>,
     pub registration_response: String,
-    #[serde(rename = "clientRegistrationState")]
     pub client_registration_state: String,
     pub identifiers: Option<CustomIdentifiers>,
-    #[serde(rename = "keyStretchingConfig")]
     pub key_stretching_function_config: KeyStretchingFunctionConfig,
 }
 
@@ -309,36 +305,21 @@ pub struct FinishClientRegistrationResult {
 pub extern "C" fn get_finish_client_registration_result_record(
     ptr: *mut FinishClientRegistrationResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.registration_record.clone())
+    result_string!(ptr, registration_record)
 }
 
 #[no_mangle]
 pub extern "C" fn get_finish_client_registration_result_export_key(
     ptr: *mut FinishClientRegistrationResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.export_key.clone())
+    result_string!(ptr, export_key)
 }
 
 #[no_mangle]
 pub extern "C" fn get_finish_client_registration_result_public_key(
     ptr: *mut FinishClientRegistrationResult,
 ) -> *const c_char {
-    let result = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-
-    csharp::rust_string_to_csharp_string_handle(result.server_static_public_key.clone())
+    result_string!(ptr, server_static_public_key)
 }
 
 #[no_mangle]
@@ -347,7 +328,5 @@ pub extern "C" fn free_finish_client_registration_result(ptr: *mut FinishClientR
         return;
     }
 
-    unsafe {
-        drop(Box::from_raw(ptr));
-    }
+    release_result_handle(ptr);
 }

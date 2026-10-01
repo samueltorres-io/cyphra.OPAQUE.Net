@@ -298,6 +298,7 @@ dependencies = [
  "p256",
  "rand",
  "serde",
+ "zeroize",
 ]
 
 [[package]]

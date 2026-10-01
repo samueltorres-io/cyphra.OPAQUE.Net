@@ -107,7 +107,7 @@ var custom = KSFConfig.Create(
     parallelism: 4);
 ```
 
-Use the same configuration for registration and login. Custom values are range-checked before the native call. The current limits are 1–10 iterations, 64 MiB–1 GiB memory, and parallelism 1–16. Changing the configuration for existing records can make login fail, so treat it as part of the credential format and migration plan.
+Use the same configuration for registration and login. Custom values are range-checked before the native call. The current limits are 1–10 iterations, 64 MiB–256 MiB memory, and parallelism 1–16. `RfcDraftRecommended` is an explicit compatibility choice and can require about 2 GiB; deploy it only where that per-request memory budget is available. Changing the configuration for existing records can make login fail, so treat it as part of the credential format and migration plan.
 
 ## Failure handling
 

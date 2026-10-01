@@ -3,7 +3,7 @@
     public class KSFConfig
     {
         public const int MinimumMemoryKiB = 64 * 1024;
-        public const int MaximumCustomMemoryKiB = 1024 * 1024;
+        public const int MaximumCustomMemoryKiB = 256 * 1024;
         public const int MinimumIterations = 1;
         public const int MaximumIterations = 10;
         public const int MinimumParallelism = 1;
