@@ -2,7 +2,6 @@
 
 name: publish
 on:
-  workflow_dispatch: # Allow running the workflow manually from the GitHub UI
   release:
     types:
       - published    # Run the workflow when a new GitHub release is published
@@ -27,19 +26,24 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_native
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         fetch-depth: 0 # Get all history to allow automatic versioning using MinVer
 
+    # Only what is on main ships: refuse a release whose tagged commit is not in main's history.
+    - name: Require tagged commit to be on main
+      shell: bash
+      run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_SHA is not on main"; exit 1; }
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
       with:
         dotnet-version: 8.0.x
 
     # Release packaging must use the native libraries built from this exact revision, never
     # binaries left over in the checkout. The reusable build workflow compiles and tests every RID.
     - name: Download freshly built native libraries
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
       with:
         pattern: native-*
         path: native-artifacts
@@ -58,7 +62,14 @@ jobs:
 
     # The native libraries are committed to the repo, built and tested by the Native workflow.
     # OPAQUE.Net.csproj fails the pack if any of them is missing.
-    - run: dotnet pack .Net/OPAQUE.Net/OPAQUE.Net.csproj --configuration Release --output ${{ env.NuGetDirectory }}
+    # The release tag (vX.Y.Z) is the single source of truth for the version; it overrides the
+    # csproj <Version>. Anything that is not a plain semver tag aborts before packing.
+    - name: Pack
+      env:
+        TAG: ${{ github.event.release.tag_name }}
+      run: |
+        if ($env:TAG -notmatch '^v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$') { throw "Tag '$env:TAG' is not vX.Y.Z" }
+        dotnet pack .Net/OPAQUE.Net/OPAQUE.Net.csproj --configuration Release --output ${{ env.NuGetDirectory }} -p:Version=$($Matches[1])
 
     # A package that silently lost a platform is worse than a failed publish, so assert the layout
     # before anything reaches nuget.org.
@@ -91,7 +102,7 @@ jobs:
         Write-Host "All $($expected.Count) expected entries are present."
 
     # Publish the NuGet package as an artifact, so they can be used in the following jobs
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: nuget
         if-no-files-found: error
@@ -101,23 +112,55 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: create_nuget
+    # Gate the API key behind a GitHub Environment (add required reviewers in repo settings).
+    environment: nuget
+    permissions:
+      contents: write     # attach assets to the GitHub release
+      id-token: write     # sign build provenance
+      attestations: write
     steps:
       # Download the NuGet package created in the previous job
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nuget
           path: ${{ env.NuGetDirectory }}
 
       - name: Setup .NET Core
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 8.0.x
+
+      - name: SHA-256 checksum
+        run: |
+          Get-ChildItem "${{ env.NuGetDirectory }}" -Filter *.nupkg | ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+              "$hash  $($_.Name)" | Tee-Object -FilePath "$($_.FullName).sha256"
+          }
+
+      # Signed SLSA provenance, verifiable with: gh attestation verify <nupkg> -R <owner>/<repo>
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: ${{ env.NuGetDirectory }}/*.nupkg
+
+      - name: Attach package and checksum to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" (Get-ChildItem "${{ env.NuGetDirectory }}" -Include *.nupkg,*.sha256 -Recurse).FullName --clobber --repo "${{ github.repository }}"
 
       # Publish all NuGet packages to NuGet.org
       # Use --skip-duplicate to prevent errors if a package with the same version already exists.
       # If you retry a failed workflow, already published packages will be skipped without error.
+      # Trusted Publishing: exchanges the job's OIDC token for a short-lived (~1h) API key.
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ secrets.NUGET_USER }}   # nuget.org profile name, not the email
+
       - name: Publish NuGet package
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
           foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg)) {
-              dotnet nuget push $file --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+              dotnet nuget push $file --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
           }
