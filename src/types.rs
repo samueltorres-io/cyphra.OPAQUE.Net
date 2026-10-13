@@ -33,7 +33,7 @@ fn release_result_handle<T>(ptr: *mut T) {
         .map(|mut handles| handles.remove(&(ptr as usize)))
         .unwrap_or(false);
     if owned {
-        let _ = csharp::ffi_boundary(|| unsafe { drop(Box::from_raw(ptr)) }, ());
+        csharp::ffi_boundary(|| unsafe { drop(Box::from_raw(ptr)) }, ());
     }
 }
 
