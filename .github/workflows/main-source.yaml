@@ -1,0 +1,18 @@
+# main only accepts pull requests coming from develop. Make this check required in the main ruleset.
+name: main source
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  from_develop:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD: ${{ github.head_ref }}
+        run: |
+          [ "$HEAD" = "develop" ] || { echo "::error::PRs into main must come from develop, got '$HEAD'"; exit 1; }
