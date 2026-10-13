@@ -29,7 +29,7 @@ pub fn rust_string_to_csharp_string_handle(s: String) -> *mut c_char {
         handles.insert(ptr as usize);
         ptr
     } else {
-        let _ = ffi_boundary(|| unsafe { drop(CString::from_raw(ptr)) }, ());
+        ffi_boundary(|| unsafe { drop(CString::from_raw(ptr)) }, ());
         std::ptr::null_mut()
     }
 }
@@ -70,6 +70,6 @@ pub extern "C" fn free_string(s: *mut c_char) {
         .map(|mut handles| handles.remove(&(s as usize)))
         .unwrap_or(false);
     if owned {
-        let _ = ffi_boundary(|| unsafe { drop(CString::from_raw(s)) }, ());
+        ffi_boundary(|| unsafe { drop(CString::from_raw(s)) }, ());
     }
 }

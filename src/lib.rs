@@ -472,14 +472,14 @@ pub extern "C" fn finish_client_registration(
         charp_config_parallelism,
     );
 
-    let result = match ksf_config {
+    match ksf_config {
         Ok(v) => {
             if let Ok(result) =
                 internal_finish_client_registration(types::FinishClientRegistrationParams {
                     password: rust_password,
                     registration_response: rust_registration_response,
                     client_registration_state: rust_client_registration_state,
-                    identifiers: identifiers,
+                    identifiers,
                     key_stretching_function_config: v,
                 })
             {
@@ -497,9 +497,7 @@ pub extern "C" fn finish_client_registration(
             export_key: "".to_string(),
             server_static_public_key: "".to_string(),
         }),
-    };
-
-    result
+    }
 }
 
 #[no_mangle]
@@ -514,7 +512,7 @@ pub extern "C" fn get_server_public_key(data: *mut c_char) -> *mut c_char {
         return csharp::rust_string_to_csharp_string_handle(public_key);
     }
 
-    return csharp::rust_string_to_csharp_string_handle("".to_string());
+    csharp::rust_string_to_csharp_string_handle("".to_string())
 }
 
 #[no_mangle]
@@ -579,7 +577,7 @@ pub extern "C" fn start_server_login(
         registration_record: rust_registration_record,
         start_login_request: rust_start_login_request,
         user_identifier: rust_user_identifier,
-        identifiers: identifiers,
+        identifiers,
     }) {
         return types::into_result_handle(result);
     }
@@ -605,7 +603,7 @@ pub extern "C" fn finish_server_login(
         return csharp::rust_string_to_csharp_string_handle(result);
     }
 
-    return csharp::rust_string_to_csharp_string_handle("".to_string());
+    csharp::rust_string_to_csharp_string_handle("".to_string())
 }
 
 #[no_mangle]
@@ -657,13 +655,13 @@ pub extern "C" fn finish_client_login(
         charp_config_parallelism,
     );
 
-    let result = match ksf_config {
+    match ksf_config {
         Ok(v) => {
             if let Ok(result) = internal_finish_client_login(types::FinishClientLoginParams {
                 client_login_state: rust_client_login_state,
                 login_response: rust_login_response,
                 password: rust_password,
-                identifiers: identifiers,
+                identifiers,
                 key_stretching_function_config: v,
             }) {
                 return types::into_result_handle(result);
@@ -682,9 +680,7 @@ pub extern "C" fn finish_client_login(
             export_key: "".to_string(),
             server_static_public_key: "".to_string(),
         }),
-    };
-
-    result
+    }
 }
 
 #[no_mangle]
