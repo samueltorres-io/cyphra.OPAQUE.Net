@@ -2,7 +2,7 @@
 # suite against each one on a runner of that exact architecture.
 #
 # This is the gate for pull requests into main. It is also exposed via workflow_call so that
-# native-binaries.yaml can reuse the matrix rather than duplicate it — jobs from a called workflow
+# publish.yaml can reuse the matrix rather than duplicate it — jobs from a called workflow
 # run inside the same workflow run, so the artifacts uploaded here are downloadable by the caller.
 #
 # Deliberately uses only first-party actions/* plus rustup, preinstalled on GitHub runners.
@@ -148,7 +148,7 @@ jobs:
           command -v cargo-zigbuild
 
       # --locked so the build fails loudly rather than silently resolving a different dependency
-      # graph than the one Cargo.lock records; the output of this step gets committed.
+      # graph than the one Cargo.lock records; the output of this step is packed by publish.yaml.
       - name: Build native library
         run: |
           set -euo pipefail
@@ -214,8 +214,7 @@ jobs:
             exit 1
           fi
 
-      # Overwrite the committed binary so the tests below exercise what we just built rather than
-      # whatever is checked in. The csproj copies the file matching this host's RID into the test
+      # Place the library where the csproj expects it (the binaries are not in git). The csproj copies the file matching this host's RID into the test
       # output directory, which is exactly this one.
       - name: Stage the built library
         run: |
