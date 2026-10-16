@@ -16,3 +16,5 @@ node_modules
 .Net/Test/obj
 bin
 target
+# Auditorias de segurança (nunca versionar)
+/security-audit/
