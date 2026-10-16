@@ -60,8 +60,8 @@ jobs:
         cp native-artifacts/native-osx-x64/libopaque-x64.dylib .Net/OPAQUE.Net/libopaque-x64.dylib
         cp native-artifacts/native-osx-arm64/libopaque.dylib .Net/OPAQUE.Net/libopaque.dylib
 
-    # The native libraries are committed to the repo, built and tested by the Native workflow.
-    # OPAQUE.Net.csproj fails the pack if any of them is missing.
+    # The native libraries are not in git: they come from the artifacts staged above. The csproj
+    # fails the pack if any is missing, or if it is not running in GitHub Actions.
     # The release tag (vX.Y.Z) is the single source of truth for the version; it overrides the
     # csproj <Version>. Anything that is not a plain semver tag aborts before packing.
     - name: Pack
