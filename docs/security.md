@@ -35,6 +35,15 @@ OPAQUE does not replace TLS, endpoint security, rate limiting, account recovery 
 - pin or validate the server public key when the application threat model requires it;
 - keep native assets aligned with their runtime identifiers.
 
+## Design notes and known limits
+
+- **Failure reporting.** Protocol failures (wrong password, tampered or malformed message, unknown step) return `false`/`null` without a cause, so callers cannot leak which step failed. Deployment faults are different: a missing or wrong-architecture native library throws `DllNotFoundException`, `EntryPointNotFoundException` or `BadImageFormatException` instead of looking like a failed login.
+- **Memory hygiene.** On the native side, passwords, protocol states, keys and `serverSetup` are held in zeroizing buffers, and every string handed to .NET is wiped when freed. .NET strings are immutable and managed, so copies the runtime makes (and the strings returned to your code) cannot be wiped by this library. Keep session and export keys short-lived and do not log them.
+- **Panics.** Every native entry point runs inside a panic boundary; an unexpected internal fault yields an empty result rather than terminating the host process.
+- **Fixed Argon2 salt.** The key-stretching step uses an all-zero salt. This follows the OPAQUE construction (the password is first blinded through the OPRF, which provides the per-user randomness) and is not a weakness of the Argon2 step.
+- **Key-stretching cost.** Argon2id runs only on the client during registration and login finish; the server never runs it. The RFC draft profile allocates about 2 GiB per operation and requires an explicit opt-in (`KSFConfig.CreateRfcDraftRecommended(true)`); custom profiles are capped at 256 MiB, 10 iterations and 16 lanes. Never pick the profile from untrusted input.
+- **Dependencies.** CI runs `cargo audit` and fails on known vulnerabilities. GitHub Actions are pinned by commit SHA.
+
 ## Security-sensitive changes
 
 Changes to cryptography, protocol state, random number generation, password handling, Argon2id settings, serialization, native interop, memory ownership, or package assets require regression tests and review. See [`CONTRIBUTING.md`](../CONTRIBUTING.md).

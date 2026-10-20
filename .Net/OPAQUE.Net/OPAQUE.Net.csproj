@@ -23,7 +23,7 @@
       on an arm64 machine at all.
     -->
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
   </PropertyGroup>
 
   <!--
@@ -49,12 +49,13 @@
   </ItemGroup>
 
   <!--
-    Native libraries, one per supported RID. See BUILDING.md; CI rebuilds and refreshes these.
+    Native libraries, one per supported RID. They are NOT in git: CI builds them from src/ and
+    Cargo.lock (build-and-test.yaml) and publish.yaml stages them before packing. See docs/building.md.
 
     Two things happen to each file:
       * Pack     - it goes to runtimes/<rid>/native/ under the file name P/Invoke probes for on that
                    OS. PackagePath names the destination file explicitly, because several of these
-                   are stored under disambiguated names in the repo (a directory can only hold one
+                   are staged under disambiguated names (a directory can only hold one
                    "libopaque.so").
       * Copy     - exactly one of them, the one matching OpaqueHostRid, is copied to the build output
                    and renamed via Link to that same canonical name. Without the RID condition an
@@ -123,10 +124,16 @@
   <!--
     A missing file makes <None Update> a silent no-op, which would produce a package quietly missing
     a platform. Fail the pack instead.
+
+    The natives are untracked build products, so a file that merely exists on disk may be a stale
+    local build. Only CI (publish.yaml stages freshly built artifacts) may pack; a local pack must
+    opt in explicitly with -p:OpaqueAllowLocalPack=true and is then never fit to publish.
   -->
-  <Target Name="ValidateNativeAssets" BeforeTargets="Pack">
+  <Target Name="ValidateNativeAssets" BeforeTargets="_IntermediatePack;GenerateNuspec">
+    <Error Condition="'$(GITHUB_ACTIONS)' != 'true' And '$(OpaqueAllowLocalPack)' != 'true'"
+           Text="Refusing to pack $(PackageId) outside CI: the native libraries are untracked build products and may be stale. Packing is done by publish.yaml. For a throwaway local package pass -p:OpaqueAllowLocalPack=true (see docs/building.md)." />
     <Error Condition="!Exists('$(MSBuildProjectDirectory)\%(OpaqueNativeAsset.Identity)')"
-           Text="Native library '%(OpaqueNativeAsset.Identity)' is missing from $(MSBuildProjectDirectory). Packing now would ship $(PackageId) without support for that platform. See BUILDING.md." />
+           Text="Native library '%(OpaqueNativeAsset.Identity)' is missing from $(MSBuildProjectDirectory). Packing now would ship $(PackageId) without support for that platform. See docs/building.md." />
   </Target>
 
 </Project>

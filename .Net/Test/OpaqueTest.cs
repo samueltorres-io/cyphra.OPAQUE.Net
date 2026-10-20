@@ -1,4 +1,5 @@
 using OPAQUE.Net;
+using OPAQUE.Net.Helpers;
 using OPAQUE.Net.Types.Exceptions;
 using OPAQUE.Net.Types.Parameters;
 using OPAQUE.Net.Types.Results;
@@ -100,7 +101,7 @@ namespace Test
             string userIdentifier = "user123";
             string password = "hunter42";
 
-            KSFConfig config = KSFConfig.Create(KSFConfigType.RfcDraftRecommended);
+            KSFConfig config = KSFConfig.CreateRfcDraftRecommended(true);
 
             SetupAndRegister(userIdentifier, password, null, null, config, out string serverSetup, out string registrationRecord,
                 out string exportKey, out string serverStaticPublicKey);
@@ -213,7 +214,7 @@ namespace Test
                 throw new Exception();
             }
 
-            KSFConfig config = KSFConfig.Create(KSFConfigType.RfcDraftRecommended);
+            KSFConfig config = KSFConfig.CreateRfcDraftRecommended(true);
 
             bool finishLoginSucceeded = client.FinishLogin(clientLoginResult.ClientLoginState, serverLoginResult!.LoginResponse, password,
                 null, null, config, out FinishClientLoginResult? finishClientLoginResult);
@@ -357,6 +358,186 @@ namespace Test
 
             Assert.ThrowsException<StringParamIsEmptyException>(() => server.FinishLogin("", "Value", out _));
             Assert.ThrowsException<StringParamIsEmptyException>(() => server.FinishLogin("Value", "", out _));
+        }
+
+        // ---- adversarial and failure-mode coverage ----
+
+        private const string User = "adversarial-user";
+        private const string Password = "correct horse battery staple";
+
+        private static string Flip(string base64Url)
+        {
+            // Flip one bit in the middle of the decoded payload; stays valid base64url.
+            string padded = base64Url.Replace('-', '+').Replace('_', '/');
+            padded = padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
+            byte[] bytes = Convert.FromBase64String(padded);
+            bytes[bytes.Length / 2] ^= 0x01;
+            return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        private static void Login(string serverSetup, string record, out StartServerLoginResult server, out FinishClientLoginResult client)
+        {
+            var c = new OpaqueClient();
+            var s = new OpaqueServer();
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartLogin(serverSetup, start!.StartLoginRequest, User, record, out StartServerLoginResult? serverResult, out _));
+            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, serverResult!.LoginResponse, Password, out FinishClientLoginResult? clientResult));
+            server = serverResult;
+            client = clientResult!;
+        }
+
+        [TestMethod]
+        public void DeploymentFaultsAreNotSwallowedButProtocolFaultsAre()
+        {
+            Assert.ThrowsException<DllNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new DllNotFoundException()));
+            Assert.ThrowsException<EntryPointNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new EntryPointNotFoundException(), out _));
+            Assert.ThrowsException<BadImageFormatException>(() => FunctionHelper.TryExecute<string>(() => throw new BadImageFormatException()));
+
+            Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException()));
+            Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException(), out Exception? e));
+            Assert.IsInstanceOfType(e, typeof(InvalidOperationException));
+        }
+
+        [TestMethod]
+        public void TamperedFinalizationIsRejectedByServer()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            Login(setup, record, out StartServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsFalse(new OpaqueServer().FinishLogin(server.ServerLoginState, Flip(client.FinishLoginRequest), out string? key));
+            Assert.IsTrue(string.IsNullOrEmpty(key));
+        }
+
+        [TestMethod]
+        public void FinalizationFromAnotherSessionIsRejected()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            Login(setup, record, out StartServerLoginResult serverA, out _);
+            Login(setup, record, out _, out FinishClientLoginResult clientB);
+
+            Assert.IsFalse(new OpaqueServer().FinishLogin(serverA.ServerLoginState, clientB.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void TamperedServerResponseYieldsNoKeysOnClient()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            var c = new OpaqueClient();
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(new OpaqueServer().StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? server, out _));
+
+            Assert.IsFalse(c.FinishLogin(start.ClientLoginState, Flip(server!.LoginResponse), Password, out FinishClientLoginResult? result));
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public void UnknownUserGetsAResponseButCannotAuthenticate()
+        {
+            OpaqueServer server = new OpaqueServer();
+            OpaqueClient client = new OpaqueClient();
+            Assert.IsTrue(server.CreateSetup(out string? setup));
+            Assert.IsTrue(client.StartLogin(Password, out StartClientLoginResult? start));
+
+            // No registration record: the server must still answer (no user enumeration here).
+            Assert.IsTrue(server.StartLogin(setup!, start!.StartLoginRequest, "nobody", null, out StartServerLoginResult? response, out _));
+            Assert.IsFalse(client.FinishLogin(start.ClientLoginState, response!.LoginResponse, Password, out FinishClientLoginResult? result));
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public void EachLoginProducesAFreshSessionKey()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            Login(setup, record, out _, out FinishClientLoginResult first);
+            Login(setup, record, out _, out FinishClientLoginResult second);
+
+            Assert.AreNotEqual(first.SessionKey, second.SessionKey);
+            Assert.AreEqual(first.ExportKey, second.ExportKey);
+        }
+
+        [TestMethod]
+        public void GarbageProtocolInputReturnsFalseInsteadOfThrowingOrCrashing()
+        {
+            OpaqueServer server = new OpaqueServer();
+            OpaqueClient client = new OpaqueClient();
+            Assert.IsTrue(server.CreateSetup(out string? setup));
+
+            foreach (string garbage in new[] { "x", "!!!", "AAAA", new string('A', 200), "////" })
+            {
+                Assert.IsFalse(server.GetPublicKey(garbage, out _));
+                Assert.IsFalse(server.CreateRegistrationResponse(garbage, User, garbage, out _));
+                Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, garbage, out _));
+                Assert.IsFalse(server.StartLogin(setup!, garbage, User, null, out _, out _));
+                Assert.IsFalse(server.FinishLogin(garbage, garbage, out _));
+                Assert.IsFalse(client.FinishRegistration(Password, garbage, garbage, out _));
+                Assert.IsFalse(client.FinishLogin(garbage, garbage, Password, out _));
+            }
+        }
+
+        [TestMethod]
+        public void OversizedInputsAreRejectedBeforeNativeInvocation()
+        {
+            OpaqueServer server = new OpaqueServer();
+            string huge = new string('A', StringParamIsEmptyException.MaximumProtocolMessageLength + 1);
+            string longId = new string('u', StringParamIsEmptyException.MaximumIdentifierLength + 1);
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.GetPublicKey(huge, out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartLogin("a", "a", "u", null, longId, null, out _, out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', StringParamIsEmptyException.MaximumPasswordLength + 1), out _));
+        }
+  
+        [TestMethod]
+        public void NulAndUnpairedSurrogatesAreRejected()
+        {
+            var client = new OpaqueClient();
+            var server = new OpaqueServer();
+            foreach (string bad in new[] { "abc\0TAIL", "\0", "pw\uD800", "\uDC00pw" })
+            {
+                Assert.ThrowsException<ArgumentException>(() => client.StartRegistration(bad, out _));
+                Assert.ThrowsException<ArgumentException>(() => client.StartLogin(bad, out _));
+                Assert.ThrowsException<ArgumentException>(() => server.CreateRegistrationResponse("a", bad, "a", out _));
+                Assert.ThrowsException<ArgumentException>(() => server.StartLogin("a", "a", "u", null, bad, null, out _, out _));
+            }
+        }
+
+        [TestMethod]
+        public void LengthLimitIsMeasuredInUtf8Bytes()
+        {
+            var client = new OpaqueClient();
+            // 342 CJK chars = 1026 bytes: used to return a silent false.
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('\u4e2d', 342), out _));
+            Assert.IsTrue(client.StartRegistration(new string('\u4e2d', 341), out _));
+        }
+
+        [TestMethod]
+        public void ValidBoundaryInputsStillAccepted()
+        {
+            var client = new OpaqueClient();
+            Assert.IsTrue(client.StartRegistration(new string('p', 1024), out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('p', 1025), out _));
+            // Valid surrogate pairs (4 bytes each) and NFD text are legitimate; 256 emoji = 1024 bytes.
+            Assert.IsTrue(client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 256)), out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 257)), out _));
+            Assert.IsTrue(client.StartRegistration("cafe\u0301", out _));
+        }
+
+        [TestMethod]
+        public void RfcDraftProfileRequiresOptInAndInvalidEnumIsRejected()
+        {
+            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.Create(KSFConfigType.RfcDraftRecommended));
+            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create((KSFConfigType)99));
+        }
+
+        [TestMethod]
+        public void RegistrationRequestWithTrailingBytesIsRejected()
+        {
+            var server = new OpaqueServer();
+            Assert.IsTrue(server.CreateSetup(out string? setup));
+            Assert.IsTrue(new OpaqueClient().StartRegistration(Password, out StartClientRegistrationResult? start));
+            Assert.IsTrue(server.CreateRegistrationResponse(setup!, User, start!.RegistrationRequest, out _));
+            Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, start.RegistrationRequest + "AAAA", out _));
         }
     }
 }

@@ -1,7 +1,6 @@
 use crate::csharp;
 use argon2::Argon2;
 use libc::c_char;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 use zeroize::Zeroizing;
@@ -54,7 +53,7 @@ macro_rules! result_string {
         csharp::ffi_boundary(
             || {
                 with_live_result_handle($ptr, |result| {
-                    csharp::rust_string_to_csharp_string_handle(result.$field.clone())
+                    csharp::rust_string_to_csharp_string_handle(&result.$field)
                 })
                 .unwrap_or(std::ptr::null_mut())
             },
@@ -63,7 +62,6 @@ macro_rules! result_string {
     };
 }
 
-#[derive(Debug, Serialize, Deserialize)]
 pub struct CustomIdentifiers {
     pub client: Option<String>,
     pub server: Option<String>,
@@ -83,51 +81,34 @@ pub struct CustomKsf {
     pub argon: Argon2<'static>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub enum KeyStretchingFunctionConfig {
-    #[serde(rename = "rfcDraftRecommended")]
     RfcDraftRecommended,
-    #[serde(rename = "memoryConstrained")]
     MemoryConstrained,
-    #[serde(rename = "custom")]
     Custom {
-        #[serde(rename = "iterations")]
         iterations: u32,
-        #[serde(rename = "memory")]
         memory: u32,
-        #[serde(rename = "parallelism")]
         parallelism: u32,
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateServerRegistrationResponseParams {
-    #[serde(rename = "serverSetup")]
-    pub server_setup: String,
-    #[serde(rename = "userIdentifier")]
+    pub server_setup: Zeroizing<String>,
     pub user_identifier: String,
-    #[serde(rename = "registrationRequest")]
-    pub registration_request: String,
+    pub registration_request: Zeroizing<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
 pub struct StartServerLoginParams {
-    #[serde(rename = "serverSetup")]
-    pub server_setup: String,
-    #[serde(rename = "registrationRecord")]
-    pub registration_record: Option<String>,
-    #[serde(rename = "startLoginRequest")]
-    pub start_login_request: String,
-    #[serde(rename = "userIdentifier")]
+    pub server_setup: Zeroizing<String>,
+    pub registration_record: Option<Zeroizing<String>>,
+    pub start_login_request: Zeroizing<String>,
     pub user_identifier: String,
     pub identifiers: Option<CustomIdentifiers>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct StartServerLoginResult {
-    #[serde(rename = "serverLoginState")]
-    pub server_login_state: String,
-    #[serde(rename = "loginResponse")]
+    pub server_login_state: Zeroizing<String>,
     pub login_response: String,
 }
 
@@ -154,19 +135,14 @@ pub extern "C" fn free_start_server_login_result(ptr: *mut StartServerLoginResul
     release_result_handle(ptr);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
 pub struct FinishServerLoginParams {
-    #[serde(rename = "serverLoginState")]
-    pub server_login_state: String,
-    #[serde(rename = "finishLoginRequest")]
-    pub finish_login_request: String,
+    pub server_login_state: Zeroizing<String>,
+    pub finish_login_request: Zeroizing<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct StartClientLoginResult {
-    #[serde(rename = "clientLoginState")]
-    pub client_login_state: String,
-    #[serde(rename = "startLoginRequest")]
+    pub client_login_state: Zeroizing<String>,
     pub start_login_request: String,
 }
 
@@ -193,24 +169,19 @@ pub extern "C" fn free_start_client_login_result(ptr: *mut StartClientLoginResul
     release_result_handle(ptr);
 }
 
-#[derive(Debug)]
 pub struct FinishClientLoginParams {
-    pub client_login_state: String,
-    pub login_response: String,
+    pub client_login_state: Zeroizing<String>,
+    pub login_response: Zeroizing<String>,
     pub password: Zeroizing<String>,
     pub identifiers: Option<CustomIdentifiers>,
     pub key_stretching_function_config: KeyStretchingFunctionConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct FinishClientLoginResult {
-    #[serde(rename = "finishLoginRequest")]
     pub finish_login_request: String,
-    #[serde(rename = "sessionKey")]
-    pub session_key: String,
-    #[serde(rename = "exportKey")]
-    pub export_key: String,
-    #[serde(rename = "serverStaticPublicKey")]
+    pub session_key: Zeroizing<String>,
+    pub export_key: Zeroizing<String>,
     pub server_static_public_key: String,
 }
 
@@ -251,11 +222,9 @@ pub extern "C" fn free_finish_client_login_result(ptr: *mut FinishClientLoginRes
     release_result_handle(ptr);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct StartClientRegistrationResult {
-    #[serde(rename = "clientRegistrationState")]
-    pub client_registration_state: String,
-    #[serde(rename = "registrationRequest")]
+    pub client_registration_state: Zeroizing<String>,
     pub registration_request: String,
 }
 
@@ -282,22 +251,18 @@ pub extern "C" fn free_start_client_registration_result(ptr: *mut StartClientReg
     release_result_handle(ptr);
 }
 
-#[derive(Debug)]
 pub struct FinishClientRegistrationParams {
     pub password: Zeroizing<String>,
-    pub registration_response: String,
-    pub client_registration_state: String,
+    pub registration_response: Zeroizing<String>,
+    pub client_registration_state: Zeroizing<String>,
     pub identifiers: Option<CustomIdentifiers>,
     pub key_stretching_function_config: KeyStretchingFunctionConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct FinishClientRegistrationResult {
-    #[serde(rename = "registrationRecord")]
     pub registration_record: String,
-    #[serde(rename = "exportKey")]
-    pub export_key: String,
-    #[serde(rename = "serverStaticPublicKey")]
+    pub export_key: Zeroizing<String>,
     pub server_static_public_key: String,
 }
 

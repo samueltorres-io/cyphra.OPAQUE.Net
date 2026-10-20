@@ -111,4 +111,6 @@ Use the same configuration for registration and login. Custom values are range-c
 
 ## Failure handling
 
-Public methods return `false` and a null result when a native protocol operation fails. Empty required strings throw `StringParamIsEmptyException`; invalid custom KSF values throw `ArgumentOutOfRangeException`. Do not turn these outcomes into detailed authentication errors visible to remote users, because that can disclose account or protocol state.
+Public methods return `false` and a null result when a native protocol operation fails. Empty required strings throw `StringParamIsEmptyException`; passwords and identifiers containing `\0` or an unpaired surrogate throw `ArgumentException`, and values over 1024 UTF-8 bytes throw `ArgumentOutOfRangeException`, so catch these when the value comes from a remote user and map them to the same generic response as a failed login. Invalid custom KSF values and `KSFConfig.Create(KSFConfigType.RfcDraftRecommended)` (use `CreateRfcDraftRecommended(true)`) also throw. Do not turn these outcomes into detailed authentication errors visible to remote users, because that can disclose account or protocol state.
+
+A missing or wrong-architecture native library is a deployment fault, not a protocol failure: it throws `DllNotFoundException`, `EntryPointNotFoundException` or `BadImageFormatException`. Let these surface (log them server-side) rather than mapping them to a failed login. Inputs over the documented length limits throw `ArgumentOutOfRangeException`.

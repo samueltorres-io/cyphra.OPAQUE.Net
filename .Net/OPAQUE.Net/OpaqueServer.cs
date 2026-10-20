@@ -30,7 +30,7 @@ namespace OPAQUE.Net
         public bool GetPublicKey(string serverSetup, out string? publicKey)
         {
             StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfLongerThan(serverSetup, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(serverSetup));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
 
             publicKey = FunctionHelper.TryExecute(() => get_server_public_key(serverSetup))?.GetAndRelease();
             return !string.IsNullOrEmpty(publicKey);
@@ -49,9 +49,9 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
             StringParamIsEmptyException.ThrowIfEmpty(userIdentifier, nameof(userIdentifier));
             StringParamIsEmptyException.ThrowIfEmpty(registrationRequest, nameof(registrationRequest));
-            StringParamIsEmptyException.ThrowIfLongerThan(serverSetup, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfLongerThan(userIdentifier, StringParamIsEmptyException.MaximumIdentifierLength, nameof(userIdentifier));
-            StringParamIsEmptyException.ThrowIfLongerThan(registrationRequest, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(registrationRequest));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
+            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier));
+            ParamGuard.ThrowIfInvalid(registrationRequest, ParamGuard.MaximumProtocolMessageLength, nameof(registrationRequest));
 
             registrationResponse = FunctionHelper.TryExecute(() => create_server_registration_response(serverSetup, userIdentifier, 
                 registrationRequest))?.GetAndRelease();
@@ -81,26 +81,26 @@ namespace OPAQUE.Net
         /// <param name="startLoginRequest"><see cref="StartClientLoginResult.StartLoginRequest"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
         /// <param name="userIdentifier">Current user identifier</param>
         /// <param name="registrationRecord"><see cref="FinishClientRegistrationResult.RegistrationRecord"/> from <see cref="OpaqueClient.FinishRegistration(string, string, string, string?, string?, OPAQUE.Net.Types.Parameters.KSFConfig, out FinishClientRegistrationResult?)"/></param>
-        /// <param name="clientIdentitiy">Current client identifier</param>
+        /// <param name="clientIdentity">Current client identifier</param>
         /// <param name="serverIdentity">Current server identifier</param>
         /// <param name="result">A <see cref="StartServerLoginResult"/> filled with data if successful</param>
         /// <param name="e">The infrastructure exception, if the native call fails</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool StartLogin(string serverSetup, string startLoginRequest, string userIdentifier, 
-            string? registrationRecord, string? clientIdentitiy, string? serverIdentity, out StartServerLoginResult? result, out Exception? e)
+            string? registrationRecord, string? clientIdentity, string? serverIdentity, out StartServerLoginResult? result, out Exception? e)
         {
             StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
             StringParamIsEmptyException.ThrowIfEmpty(startLoginRequest, nameof(startLoginRequest));
             StringParamIsEmptyException.ThrowIfEmpty(userIdentifier, nameof(userIdentifier));
-            StringParamIsEmptyException.ThrowIfLongerThan(serverSetup, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfLongerThan(startLoginRequest, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(startLoginRequest));
-            StringParamIsEmptyException.ThrowIfLongerThan(userIdentifier, StringParamIsEmptyException.MaximumIdentifierLength, nameof(userIdentifier));
-            StringParamIsEmptyException.ThrowIfLongerThan(registrationRecord, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(registrationRecord));
-            StringParamIsEmptyException.ThrowIfLongerThan(clientIdentitiy, StringParamIsEmptyException.MaximumIdentifierLength, nameof(clientIdentitiy));
-            StringParamIsEmptyException.ThrowIfLongerThan(serverIdentity, StringParamIsEmptyException.MaximumIdentifierLength, nameof(serverIdentity));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
+            ParamGuard.ThrowIfInvalid(startLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(startLoginRequest));
+            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier));
+            ParamGuard.ThrowIfInvalid(registrationRecord, ParamGuard.MaximumProtocolMessageLength, nameof(registrationRecord));
+            ParamGuard.ThrowIfInvalid(clientIdentity, ParamGuard.MaximumIdentifierLength, nameof(clientIdentity));
+            ParamGuard.ThrowIfInvalid(serverIdentity, ParamGuard.MaximumIdentifierLength, nameof(serverIdentity));
 
             result = FunctionHelper.TryExecute(() => start_server_login(serverSetup, startLoginRequest, 
-                userIdentifier, registrationRecord ?? "", clientIdentitiy ?? "", serverIdentity ?? ""), out e)?.GetAndRelease();
+                userIdentifier, registrationRecord ?? "", clientIdentity ?? "", serverIdentity ?? ""), out e)?.GetAndRelease();
 
             return result != null;
         }
@@ -116,8 +116,8 @@ namespace OPAQUE.Net
         {
             StringParamIsEmptyException.ThrowIfEmpty(serverLoginState, nameof(serverLoginState));
             StringParamIsEmptyException.ThrowIfEmpty(finishLoginRequest, nameof(finishLoginRequest));
-            StringParamIsEmptyException.ThrowIfLongerThan(serverLoginState, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(serverLoginState));
-            StringParamIsEmptyException.ThrowIfLongerThan(finishLoginRequest, StringParamIsEmptyException.MaximumProtocolMessageLength, nameof(finishLoginRequest));
+            ParamGuard.ThrowIfInvalid(serverLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(serverLoginState));
+            ParamGuard.ThrowIfInvalid(finishLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(finishLoginRequest));
 
             serverSessionKey = FunctionHelper.TryExecute(() => finish_server_login(serverLoginState, finishLoginRequest))?.GetAndRelease();
             return !string.IsNullOrEmpty(serverSessionKey);
@@ -134,7 +134,7 @@ namespace OPAQUE.Net
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StartServerLoginResultHandle start_server_login([MarshalAs(UnmanagedType.LPUTF8Str)] string serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string startLoginRequest,
-            [MarshalAs(UnmanagedType.LPUTF8Str)] string userIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? registrationRecord, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentitiy, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentity);
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string userIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? registrationRecord, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentity, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentity);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StringHandle finish_server_login([MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string finishLoginRequest);

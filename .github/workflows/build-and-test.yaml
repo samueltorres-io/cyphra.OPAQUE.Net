@@ -2,10 +2,10 @@
 # suite against each one on a runner of that exact architecture.
 #
 # This is the gate for pull requests into main. It is also exposed via workflow_call so that
-# native-binaries.yaml can reuse the matrix rather than duplicate it — jobs from a called workflow
+# publish.yaml can reuse the matrix rather than duplicate it — jobs from a called workflow
 # run inside the same workflow run, so the artifacts uploaded here are downloadable by the caller.
 #
-# Deliberately uses only first-party actions/* plus rustup, preinstalled on GitHub runners.
+# Deliberately uses only first-party actions/* (pinned by commit SHA) plus rustup, preinstalled on GitHub runners.
 
 name: Build and test
 
@@ -45,28 +45,28 @@ jobs:
             target: x86_64-unknown-linux-gnu
             zig_target: x86_64-unknown-linux-gnu.2.17
             cargo_out: libopaque.so
-            committed: libopaque.so
+            staged: libopaque.so
             expect_arch: x86-64
           - rid: linux-arm64
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             zig_target: aarch64-unknown-linux-gnu.2.17
             cargo_out: libopaque.so
-            committed: libopaque-linux-arm64.so
+            staged: libopaque-linux-arm64.so
             expect_arch: aarch64
           - rid: win-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             zig_target: ''
             cargo_out: opaque.dll
-            committed: opaque.dll
+            staged: opaque.dll
             expect_arch: x86-64
           - rid: win-arm64
             os: windows-11-arm
             target: aarch64-pc-windows-msvc
             zig_target: ''
             cargo_out: opaque.dll
-            committed: opaque-arm64.dll
+            staged: opaque-arm64.dll
             # file(1) builds disagree on how they spell PE ARM64.
             expect_arch: aarch64|arm64
           - rid: osx-x64
@@ -74,14 +74,14 @@ jobs:
             target: x86_64-apple-darwin
             zig_target: ''
             cargo_out: libopaque.dylib
-            committed: libopaque-x64.dylib
+            staged: libopaque-x64.dylib
             expect_arch: x86_64
           - rid: osx-arm64
             os: macos-latest
             target: aarch64-apple-darwin
             zig_target: ''
             cargo_out: libopaque.dylib
-            committed: libopaque.dylib
+            staged: libopaque.dylib
             expect_arch: arm64
 
     defaults:
@@ -90,7 +90,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Rust ships in the standard runner images, but the ARM64 images are newer and their contents
       # are less settled, so install rustup if it is absent rather than assume it.
@@ -117,8 +117,16 @@ jobs:
           cargo clippy --all-targets --all-features --locked -- -D warnings
           cargo test --all-features --locked
 
+      # Fails on known-vulnerable dependencies (e.g. curve25519-dalek < 4.1.3, RUSTSEC-2024-0344).
+      # Warnings such as unsound/unmaintained advisories do not fail the step.
+      - name: Audit dependencies
+        if: matrix.rid == 'linux-x64'
+        run: |
+          cargo install --locked cargo-audit --version 0.22.2
+          cargo audit
+
       - name: Cache cargo registry and build directory
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry/index
@@ -148,7 +156,7 @@ jobs:
           command -v cargo-zigbuild
 
       # --locked so the build fails loudly rather than silently resolving a different dependency
-      # graph than the one Cargo.lock records; the output of this step gets committed.
+      # graph than the one Cargo.lock records; the output of this step is packed by publish.yaml.
       - name: Build native library
         run: |
           set -euo pipefail
@@ -214,18 +222,17 @@ jobs:
             exit 1
           fi
 
-      # Overwrite the committed binary so the tests below exercise what we just built rather than
-      # whatever is checked in. The csproj copies the file matching this host's RID into the test
+      # Place the library where the csproj expects it (the binaries are not in git). The csproj copies the file matching this host's RID into the test
       # output directory, which is exactly this one.
       - name: Stage the built library
         run: |
           set -euo pipefail
           cp "target/${{ matrix.target }}/release/${{ matrix.cargo_out }}" \
-             ".Net/OPAQUE.Net/${{ matrix.committed }}"
-          ls -l ".Net/OPAQUE.Net/${{ matrix.committed }}"
+             ".Net/OPAQUE.Net/${{ matrix.staged }}"
+          ls -l ".Net/OPAQUE.Net/${{ matrix.staged }}"
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 8.0.x
 
@@ -239,13 +246,17 @@ jobs:
       - name: Build
         run: dotnet build .Net/OPAQUE.Net/OPAQUE.Net.sln --configuration Release
 
+      - name: Check local pack is refused
+        if: matrix.rid == 'linux-x64'
+        run: scripts/check-pack-guard.sh
+
       - name: Test
         run: dotnet test .Net/OPAQUE.Net/OPAQUE.Net.sln --configuration Release --no-build
 
       - name: Upload native library
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-${{ matrix.rid }}
-          path: .Net/OPAQUE.Net/${{ matrix.committed }}
+          path: .Net/OPAQUE.Net/${{ matrix.staged }}
           if-no-files-found: error
           retention-days: 7

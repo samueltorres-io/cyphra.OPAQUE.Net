@@ -35,7 +35,7 @@ The tests cover successful registration and login, RFC-recommended and custom KS
 cargo build --release --locked --target <rust-target>
 ```
 
-Copy the output to the corresponding asset in `.Net/OPAQUE.Net/`, using the table above. Then run the .NET tests. Confirm the architecture before committing a native file:
+Copy the output to the corresponding asset in `.Net/OPAQUE.Net/`, using the table above, then run the .NET tests. These files are git-ignored build products: never commit them, and rebuild after every change under `src/` or to `Cargo.lock`. Confirm the architecture:
 
 ```sh
 file .Net/OPAQUE.Net/libopaque.so
@@ -52,9 +52,13 @@ cargo zigbuild --release --locked --target x86_64-unknown-linux-gnu.2.17
 cargo zigbuild --release --locked --target aarch64-unknown-linux-gnu.2.17
 ```
 
-Do not replace the committed Linux libraries with a plain native build from a newer distribution; it may require a newer glibc than supported.
+Do not use a plain native build from a newer distribution for anything that ships; it may require a newer glibc than supported.
 
 ## Packaging
+
+`dotnet test` copies whichever native library is on disk. After changing `src/` or `Cargo.lock`, rebuild it (`cargo build --release --locked`) and copy it over the file in `.Net/OPAQUE.Net/`, or a stale binary can make tests pass against old code.
+
+Releases are packed only by `publish.yaml`, from natives built by CI for that exact commit. Outside GitHub Actions `dotnet pack` fails on purpose, because the untracked natives on your disk may be stale. For a throwaway local package add `-p:OpaqueAllowLocalPack=true` (all six files must exist); never publish it.
 
 ```sh
 dotnet pack .Net/OPAQUE.Net/OPAQUE.Net.csproj --configuration Release --output ./artifacts
