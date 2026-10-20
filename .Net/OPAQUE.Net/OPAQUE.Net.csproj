@@ -23,7 +23,7 @@
       on an arm64 machine at all.
     -->
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
   </PropertyGroup>
 
   <!--

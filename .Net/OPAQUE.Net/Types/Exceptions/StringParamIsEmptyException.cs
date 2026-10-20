@@ -15,8 +15,8 @@
             }
         }
 
-        [Obsolete("Use the argument checks performed by the public API; kept for source compatibility. Throws ArgumentOutOfRangeException, not this type.")]
+        [Obsolete("Use the argument checks performed by the public API; kept for source compatibility. Throws ArgumentException or ArgumentOutOfRangeException, not this type.")]
         public static void ThrowIfLongerThan(string? value, int maximumLength, string paramName) =>
-            ParamGuard.ThrowIfLongerThan(value, maximumLength, paramName);
+            ParamGuard.ThrowIfInvalid(value, maximumLength, paramName);
     }
 }

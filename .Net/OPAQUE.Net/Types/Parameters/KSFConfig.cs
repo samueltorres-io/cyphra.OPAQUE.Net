@@ -49,6 +49,16 @@
 
         public static KSFConfig Create(KSFConfigType type, int? iterations = null, int? memory = null, int? parallelism = null)
         {
+            if (type == KSFConfigType.RfcDraftRecommended)
+            {
+                throw new InvalidOperationException("The RFC draft KSF profile requires an explicit high-memory opt-in: use CreateRfcDraftRecommended(true).");
+            }
+
+            if (!Enum.IsDefined(type))
+            {
+                throw new ArgumentOutOfRangeException(nameof(type));
+            }
+
             if (type == KSFConfigType.Custom)
             {
                 if (iterations == null || memory == null || parallelism == null)

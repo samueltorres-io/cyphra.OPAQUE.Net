@@ -20,7 +20,7 @@ namespace OPAQUE.Net
         public bool StartRegistration(string password, out StartClientRegistrationResult? result)
         {
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            ParamGuard.ThrowIfLongerThan(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
 
             result = FunctionHelper.TryExecute(() => start_client_registration(password))?.GetAndRelease();
             return result != null;
@@ -56,11 +56,11 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
             StringParamIsEmptyException.ThrowIfEmpty(registrationResponse, nameof(registrationResponse));
             StringParamIsEmptyException.ThrowIfEmpty(clientRegistrationState, nameof(clientRegistrationState));
-            ParamGuard.ThrowIfLongerThan(password, ParamGuard.MaximumPasswordLength, nameof(password));
-            ParamGuard.ThrowIfLongerThan(registrationResponse, ParamGuard.MaximumProtocolMessageLength, nameof(registrationResponse));
-            ParamGuard.ThrowIfLongerThan(clientRegistrationState, ParamGuard.MaximumProtocolMessageLength, nameof(clientRegistrationState));
-            ParamGuard.ThrowIfLongerThan(clientIdentifier, ParamGuard.MaximumIdentifierLength, nameof(clientIdentifier));
-            ParamGuard.ThrowIfLongerThan(serverIdentifier, ParamGuard.MaximumIdentifierLength, nameof(serverIdentifier));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(registrationResponse, ParamGuard.MaximumProtocolMessageLength, nameof(registrationResponse));
+            ParamGuard.ThrowIfInvalid(clientRegistrationState, ParamGuard.MaximumProtocolMessageLength, nameof(clientRegistrationState));
+            ParamGuard.ThrowIfInvalid(clientIdentifier, ParamGuard.MaximumIdentifierLength, nameof(clientIdentifier));
+            ParamGuard.ThrowIfInvalid(serverIdentifier, ParamGuard.MaximumIdentifierLength, nameof(serverIdentifier));
 
             config ??= KSFConfig.Create(KSFConfigType.MemoryConstrained);
 
@@ -79,7 +79,7 @@ namespace OPAQUE.Net
         public bool StartLogin(string password, out StartClientLoginResult? result)
         {
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            ParamGuard.ThrowIfLongerThan(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
 
             result = FunctionHelper.TryExecute(() => start_client_login(password))?.GetAndRelease();
             return result != null;
@@ -115,11 +115,11 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(clientLoginState, nameof(clientLoginState));
             StringParamIsEmptyException.ThrowIfEmpty(serverLoginResponse, nameof(serverLoginResponse));
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            ParamGuard.ThrowIfLongerThan(clientLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(clientLoginState));
-            ParamGuard.ThrowIfLongerThan(serverLoginResponse, ParamGuard.MaximumProtocolMessageLength, nameof(serverLoginResponse));
-            ParamGuard.ThrowIfLongerThan(password, ParamGuard.MaximumPasswordLength, nameof(password));
-            ParamGuard.ThrowIfLongerThan(clientIdentifier, ParamGuard.MaximumIdentifierLength, nameof(clientIdentifier));
-            ParamGuard.ThrowIfLongerThan(serverIdentifier, ParamGuard.MaximumIdentifierLength, nameof(serverIdentifier));
+            ParamGuard.ThrowIfInvalid(clientLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(clientLoginState));
+            ParamGuard.ThrowIfInvalid(serverLoginResponse, ParamGuard.MaximumProtocolMessageLength, nameof(serverLoginResponse));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(clientIdentifier, ParamGuard.MaximumIdentifierLength, nameof(clientIdentifier));
+            ParamGuard.ThrowIfInvalid(serverIdentifier, ParamGuard.MaximumIdentifierLength, nameof(serverIdentifier));
 
             config ??= KSFConfig.Create(KSFConfigType.MemoryConstrained);
 

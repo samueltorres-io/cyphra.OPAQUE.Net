@@ -255,9 +255,15 @@ fn internal_create_server_registration_response(
 ) -> Result<String, Error> {
     let server_setup = decode_server_setup(&params.server_setup)?;
     let registration_request_bytes = base64_decode(&params.registration_request)?;
+    let registration_request =
+        RegistrationRequest::deserialize(&registration_request_bytes).map_err(protocol_error)?;
+    // opaque-ke ignores trailing bytes; require the canonical encoding like every other parser.
+    if registration_request.serialize().len() != registration_request_bytes.len() {
+        return Err(Error::Base64);
+    }
     let server_registration_start_result = ServerRegistration::<DefaultCipherSuite>::start(
         &server_setup,
-        RegistrationRequest::deserialize(&registration_request_bytes).map_err(protocol_error)?,
+        registration_request,
         params.user_identifier.as_bytes(),
     )
     .map_err(protocol_error)?;
@@ -1088,5 +1094,24 @@ mod tests {
             request.as_ptr() as *mut c_char,
         )
         .is_null());
+    }
+
+    #[test]
+    fn registration_request_must_be_exact_length() {
+        let setup = internal_create_server_setup();
+        let start = internal_start_client_registration(z("pw")).ok().unwrap();
+        let mut bytes = BASE64.decode(&start.registration_request).unwrap();
+        let call = |b: &[u8]| {
+            internal_create_server_registration_response(
+                types::CreateServerRegistrationResponseParams {
+                    server_setup: z(&setup),
+                    user_identifier: USER.to_owned(),
+                    registration_request: z(&BASE64.encode(b)),
+                },
+            )
+        };
+        assert!(call(&bytes).is_ok());
+        bytes.push(0);
+        assert!(call(&bytes).is_err());
     }
 }
