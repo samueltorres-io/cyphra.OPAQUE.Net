@@ -617,5 +617,36 @@ namespace Test
             Assert.ThrowsException<ArgumentException>(() => s.StartSealedLogin("a", "a", "u\0x", null, out _, out _));
             Assert.IsFalse(s.FinishSealedLogin("a", "a", "a", out _));
         }
+
+        [TestMethod]
+        public void ResolverLoadsFromHostDirectoriesAndIgnoresOtherLibraries()
+        {
+            Assert.AreEqual(IntPtr.Zero, NativeLibraryResolver.Resolve("something-else", typeof(OpaqueServer).Assembly, null));
+            Assert.IsTrue(File.Exists(Path.Combine(AppContext.BaseDirectory, NativeLibraryResolver.FileName())));
+        }
+
+        [TestMethod]
+        public void ResolverNeverFallsBackToTheOperatingSystemSearch()
+        {
+            string empty = Directory.CreateTempSubdirectory().FullName;
+            string broken = Directory.CreateTempSubdirectory().FullName;
+            try
+            {
+                File.WriteAllText(Path.Combine(broken, NativeLibraryResolver.FileName()), "not a library");
+
+                var missing = Assert.ThrowsException<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty }));
+                StringAssert.Contains(missing.Message, empty);
+                StringAssert.Contains(missing.Message, System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier);
+
+                var unloadable = Assert.ThrowsException<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty, broken }));
+                StringAssert.Contains(unloadable.Message, "could not be loaded");
+                StringAssert.Contains(unloadable.Message, broken);
+            }
+            finally
+            {
+                Directory.Delete(empty, true);
+                Directory.Delete(broken, true);
+            }
+        }
     }
 }

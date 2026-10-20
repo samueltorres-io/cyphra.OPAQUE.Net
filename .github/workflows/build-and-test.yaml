@@ -6,6 +6,7 @@
 # run inside the same workflow run, so the artifacts uploaded here are downloadable by the caller.
 #
 # Deliberately uses only first-party actions/* (pinned by commit SHA) plus rustup, preinstalled on GitHub runners.
+# Release builds (called from publish.yaml) restore no cache, so nothing cached can end up in the package.
 
 name: Build and test
 
@@ -92,15 +93,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # Rust ships in the standard runner images, but the ARM64 images are newer and their contents
-      # are less settled, so install rustup if it is absent rather than assume it.
-      - name: Ensure rustup is available
-        run: |
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain none
-            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          fi
+      # rustup ships in every GitHub-hosted image used here (including windows-11-arm). Fail loudly
+      # instead of fetching and executing an installer from the network.
+      - name: Require rustup
+        run: command -v rustup || { echo "::error::rustup is not installed on this runner"; exit 1; }
 
       # rust-toolchain.toml pins the version; `rustup show` installs it if it is not present.
       - name: Install pinned Rust toolchain
@@ -126,13 +122,13 @@ jobs:
           cargo audit
 
       - name: Cache cargo registry and build directory
+        if: github.event_name != 'release'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            ~/.cargo/bin
             target/${{ matrix.target }}
           key: cargo-${{ matrix.rid }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
@@ -145,7 +141,7 @@ jobs:
         if: matrix.zig_target != ''
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet --user 'ziglang==0.13.0'
+          python3 -m pip install --quiet --user --require-hashes -r .github/requirements-zig.txt
           if ! command -v cargo-zigbuild >/dev/null 2>&1; then
             cargo install --locked cargo-zigbuild --version 0.20.1
           fi
@@ -234,7 +230,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       # Both projects are AnyCPU, so a solution build and a bare project build resolve the same
       # output directory (bin/<config>/net8.0) and --no-build is safe either way. Going through the

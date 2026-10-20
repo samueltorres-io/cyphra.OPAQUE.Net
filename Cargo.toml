@@ -15,7 +15,7 @@ default = []
 p256 = ["dep:p256"]
 
 [dependencies]
-opaque-ke = { version = "3.0.0-pre.4", features = ["argon2"] }
+opaque-ke = { version = "3.0.0", features = ["argon2"] }
 # Enables rand's OS entropy (OsRng) used via opaque_ke::rand; no direct API use.
 rand = { version = "0.8.5", default-features = false, features = ["std", "getrandom"] }
 argon2 = "0.5"
