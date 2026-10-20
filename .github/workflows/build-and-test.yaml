@@ -45,28 +45,28 @@ jobs:
             target: x86_64-unknown-linux-gnu
             zig_target: x86_64-unknown-linux-gnu.2.17
             cargo_out: libopaque.so
-            committed: libopaque.so
+            staged: libopaque.so
             expect_arch: x86-64
           - rid: linux-arm64
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             zig_target: aarch64-unknown-linux-gnu.2.17
             cargo_out: libopaque.so
-            committed: libopaque-linux-arm64.so
+            staged: libopaque-linux-arm64.so
             expect_arch: aarch64
           - rid: win-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             zig_target: ''
             cargo_out: opaque.dll
-            committed: opaque.dll
+            staged: opaque.dll
             expect_arch: x86-64
           - rid: win-arm64
             os: windows-11-arm
             target: aarch64-pc-windows-msvc
             zig_target: ''
             cargo_out: opaque.dll
-            committed: opaque-arm64.dll
+            staged: opaque-arm64.dll
             # file(1) builds disagree on how they spell PE ARM64.
             expect_arch: aarch64|arm64
           - rid: osx-x64
@@ -74,14 +74,14 @@ jobs:
             target: x86_64-apple-darwin
             zig_target: ''
             cargo_out: libopaque.dylib
-            committed: libopaque-x64.dylib
+            staged: libopaque-x64.dylib
             expect_arch: x86_64
           - rid: osx-arm64
             os: macos-latest
             target: aarch64-apple-darwin
             zig_target: ''
             cargo_out: libopaque.dylib
-            committed: libopaque.dylib
+            staged: libopaque.dylib
             expect_arch: arm64
 
     defaults:
@@ -228,8 +228,8 @@ jobs:
         run: |
           set -euo pipefail
           cp "target/${{ matrix.target }}/release/${{ matrix.cargo_out }}" \
-             ".Net/OPAQUE.Net/${{ matrix.committed }}"
-          ls -l ".Net/OPAQUE.Net/${{ matrix.committed }}"
+             ".Net/OPAQUE.Net/${{ matrix.staged }}"
+          ls -l ".Net/OPAQUE.Net/${{ matrix.staged }}"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -257,6 +257,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.rid }}
-          path: .Net/OPAQUE.Net/${{ matrix.committed }}
+          path: .Net/OPAQUE.Net/${{ matrix.staged }}
           if-no-files-found: error
           retention-days: 7
