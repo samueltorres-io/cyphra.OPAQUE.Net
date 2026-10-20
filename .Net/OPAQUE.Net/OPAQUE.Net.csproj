@@ -55,7 +55,7 @@
     Two things happen to each file:
       * Pack     - it goes to runtimes/<rid>/native/ under the file name P/Invoke probes for on that
                    OS. PackagePath names the destination file explicitly, because several of these
-                   are stored under disambiguated names in the repo (a directory can only hold one
+                   are staged under disambiguated names (a directory can only hold one
                    "libopaque.so").
       * Copy     - exactly one of them, the one matching OpaqueHostRid, is copied to the build output
                    and renamed via Link to that same canonical name. Without the RID condition an
