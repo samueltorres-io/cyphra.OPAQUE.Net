@@ -1,5 +1,9 @@
+using System.ComponentModel;
+
 namespace OPAQUE.Net.Helpers
 {
+    /// <remarks>Internal plumbing, not part of the supported API; it becomes internal in 2.0.</remarks>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static class FunctionHelper
     {
         /// <summary>

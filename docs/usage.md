@@ -63,12 +63,12 @@ if (!client.StartLogin(password,
     out StartClientLoginResult? clientStart) || clientStart is null)
     throw new InvalidOperationException("Client login could not start.");
 
-if (!server.StartLogin(
+if (!server.StartSealedLogin(
     serverSetup,
     clientStart.StartLoginRequest,
     userIdentifier,
     registrationRecord,
-    out StartServerLoginResult? serverStart,
+    out StartSealedServerLoginResult? serverStart,
     out Exception? infrastructureError) || serverStart is null)
 {
     throw new AuthenticationException("Login could not start.", infrastructureError);
@@ -81,8 +81,11 @@ if (!client.FinishLogin(
     out FinishClientLoginResult? clientFinish) || clientFinish is null)
     throw new AuthenticationException("Invalid credentials.");
 
-if (!server.FinishLogin(
-    serverStart.ServerLoginState,
+// Only LoginResponse goes to the client. SealedLoginState is encrypted, tamper-proof and expires
+// after two minutes, so any server-side store works (cache, database), on any instance sharing the setup.
+if (!server.FinishSealedLogin(
+    serverSetup,
+    serverStart.SealedLoginState,
     clientFinish.FinishLoginRequest,
     out string? serverSessionKey) || serverSessionKey is null)
     throw new AuthenticationException("Login could not be completed.");

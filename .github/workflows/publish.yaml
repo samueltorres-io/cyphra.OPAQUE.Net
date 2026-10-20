@@ -82,6 +82,8 @@ jobs:
           'runtimes/win-arm64/native/opaque.dll'
           'runtimes/osx-x64/native/libopaque.dylib'
           'runtimes/osx-arm64/native/libopaque.dylib'
+          'build/Cyphra.OPAQUE.Net.targets'
+          'buildTransitive/Cyphra.OPAQUE.Net.targets'
           'lib/net8.0/OPAQUE.Net.dll'
         )
         $package = Get-ChildItem "${{ env.NuGetDirectory }}" -Filter *.nupkg | Select-Object -First 1

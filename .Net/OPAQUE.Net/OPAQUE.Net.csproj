@@ -7,6 +7,11 @@
     <EnablePackageValidation>true</EnablePackageValidation>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Source Link ships with the SDK; embedded symbols keep the package a single .nupkg. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>embedded</DebugType>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     <PackageTags>Opaque, library</PackageTags>
     <PackageId>Cyphra.OPAQUE.Net</PackageId>
     <Title>Cyphra OPAQUE.Net</Title>
@@ -36,6 +41,11 @@
     <OpaqueHostRid Condition="'$(OpaqueHostRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</OpaqueHostRid>
     <OpaqueHostRid Condition="'$(OpaqueHostRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</OpaqueHostRid>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Test" />
+    <None Include="build\Cyphra.OPAQUE.Net.targets" Pack="true" PackagePath="build;buildTransitive" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\LICENSE">

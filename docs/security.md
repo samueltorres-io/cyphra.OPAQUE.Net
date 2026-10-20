@@ -31,6 +31,7 @@ OPAQUE does not replace TLS, endpoint security, rate limiting, account recovery 
 - use authenticated transport and bind the protocol to the intended account/context;
 - rate-limit and monitor login attempts;
 - treat export keys and session keys as secrets;
+- use `StartSealedLogin` / `FinishSealedLogin` for the server side of login. The sealed state is encrypted and authenticated with a key derived from `serverSetup` (XChaCha20-Poly1305, HKDF-SHA512), so it exposes nothing, cannot be forged or altered, is bound to your setup and expires after two minutes; every instance of your service must share the same `serverSetup` and have a reasonably synchronized clock (NTP), because the expiry is checked against the local clock. It is not single-use: to reject a replay inside the window, remember the state (or its hash) until it expires. The raw `ServerLoginState` of the obsolete `StartLogin` holds the session key in clear and the key that verifies the client's finish message, so whoever has it can finish the login without the password: never send it to the client or put it in a cookie, URL, log or shared cache;
 - avoid revealing whether a user exists or which protocol step failed;
 - pin or validate the server public key when the application threat model requires it;
 - keep native assets aligned with their runtime identifiers.
@@ -42,6 +43,7 @@ OPAQUE does not replace TLS, endpoint security, rate limiting, account recovery 
 - **Panics.** Every native entry point runs inside a panic boundary; an unexpected internal fault yields an empty result rather than terminating the host process.
 - **Fixed Argon2 salt.** The key-stretching step uses an all-zero salt. This follows the OPAQUE construction (the password is first blinded through the OPRF, which provides the per-user randomness) and is not a weakness of the Argon2 step.
 - **Key-stretching cost.** Argon2id runs only on the client during registration and login finish; the server never runs it. The RFC draft profile allocates about 2 GiB per operation and requires an explicit opt-in (`KSFConfig.CreateRfcDraftRecommended(true)`); custom profiles are capped at 256 MiB, 10 iterations and 16 lanes. Never pick the profile from untrusted input.
+- **Native library loading.** `NativeLibraryResolver` loads the library only from directories resolved by the .NET host and never falls back to the operating-system search of a bare name, so a library planted through `LD_LIBRARY_PATH`, `PATH` or the working directory is not picked up. Failures throw `DllNotFoundException` with the probed directories. Keep the application directory itself unwritable by untrusted users.
 - **Dependencies.** CI runs `cargo audit` and fails on known vulnerabilities. GitHub Actions are pinned by commit SHA.
 
 ## Security-sensitive changes

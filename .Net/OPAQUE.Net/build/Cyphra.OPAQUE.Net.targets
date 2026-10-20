@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    The package ships native libraries for linux-x64/arm64 (glibc), win-x64/arm64 and osx-x64/arm64 only.
+    Other RIDs would restore without a matching binary (or with a glibc one on musl) and fail at run time.
+  -->
+  <Target Name="OpaqueWarnUnsupportedRuntimeIdentifier" BeforeTargets="ResolvePackageAssets" Condition="'$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_OpaqueRidUnsupported Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', 'musl|bionic|android|ios|tvos|browser|wasi')) Or !$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '-(x64|arm64)$'))">true</_OpaqueRidUnsupported>
+    </PropertyGroup>
+    <Warning Condition="'$(_OpaqueRidUnsupported)' == 'true'"
+             Code="OPAQUE001"
+             Text="Cyphra.OPAQUE.Net has no native library for the runtime identifier '$(RuntimeIdentifier)'. Supported: linux-x64, linux-arm64 (glibc only, not musl/Alpine), win-x64, win-arm64, osx-x64, osx-arm64." />
+  </Target>
+</Project>

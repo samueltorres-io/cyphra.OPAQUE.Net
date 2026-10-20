@@ -1,6 +1,6 @@
 # Cyphra OPAQUE.Net
 
-Secure password authentication for .NET using the [OPAQUE protocol](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/).
+Secure password authentication for .NET using the [OPAQUE protocol](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/), as implemented by [opaque-ke](https://github.com/facebook/opaque-ke) 3.0 (draft-irtf-cfrg-opaque-16). Records and messages are not guaranteed to interoperate with other drafts or with the published RFC.
 
 This project is a fork of [Vaultic-LLC/OPAQUE.Net](https://github.com/Vaultic-LLC/OPAQUE.Net). Its goal is to improve the library, keep it maintained, and strengthen its security over time.
 
@@ -50,7 +50,13 @@ For the complete registration and login sequence, result handling, identifiers, 
 
 The package targets .NET 8 and includes native binaries for Windows, Linux, and macOS on x64 and arm64.
 
-The correct native library is selected by the .NET runtime identifier. See [supported platforms and builds](docs/building.md) for details.
+The correct native library is selected by the .NET runtime identifier. Linux support is glibc only: Alpine/musl (`linux-musl-*`) and other runtime identifiers such as `win-x86` or `linux-arm` have no native library, and building for them emits warning `OPAQUE001`. See [supported platforms and builds](docs/building.md) for details.
+
+The native library is loaded only from the directories the .NET host resolved for your application (the `runtimes/<rid>/native` assets, the application and assembly directories). A missing or unloadable library throws `DllNotFoundException` listing the probed directories; the operating-system search path (`LD_LIBRARY_PATH`, `PATH`, working directory) is never consulted.
+
+### Verifying a release
+
+Each release package carries signed build provenance. Verify a downloaded `.nupkg` with `gh attestation verify <file>.nupkg -R samueltorres-io/cyphra.OPAQUE.Net`.
 
 ## Project status
 
