@@ -31,3 +31,5 @@ zeroize = "1.8"
 [profile.release]
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
+# Do not set `panic = "abort"`: the FFI entry points rely on catch_unwind to keep a panic from
+# terminating the host process (see csharp::ffi_boundary).

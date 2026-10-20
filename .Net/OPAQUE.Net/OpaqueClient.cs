@@ -140,7 +140,7 @@ namespace OPAQUE.Net
         private static extern StartClientLoginResultHandle start_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string password);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern FinishClientLoginResultHandler? finish_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string clientLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginResponse, [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
+        private static extern FinishClientLoginResultHandle? finish_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string clientLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginResponse, [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
     }
 }

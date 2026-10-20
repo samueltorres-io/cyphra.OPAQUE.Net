@@ -56,6 +56,8 @@ Do not use a plain native build from a newer distribution for anything that ship
 
 ## Packaging
 
+`dotnet test` copies whichever native library is on disk. After changing `src/` or `Cargo.lock`, rebuild it (`cargo build --release --locked`) and copy it over the file in `.Net/OPAQUE.Net/`, or a stale binary can make tests pass against old code.
+
 Releases are packed only by `publish.yaml`, from natives built by CI for that exact commit. Outside GitHub Actions `dotnet pack` fails on purpose, because the untracked natives on your disk may be stale. For a throwaway local package add `-p:OpaqueAllowLocalPack=true` (all six files must exist); never publish it.
 
 ```sh
