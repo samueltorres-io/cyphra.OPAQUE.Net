@@ -1,4 +1,5 @@
 using OPAQUE.Net;
+using OPAQUE.Net.Helpers;
 using OPAQUE.Net.Types.Exceptions;
 using OPAQUE.Net.Types.Parameters;
 using OPAQUE.Net.Types.Results;
@@ -357,6 +358,133 @@ namespace Test
 
             Assert.ThrowsException<StringParamIsEmptyException>(() => server.FinishLogin("", "Value", out _));
             Assert.ThrowsException<StringParamIsEmptyException>(() => server.FinishLogin("Value", "", out _));
+        }
+
+        // ---- adversarial and failure-mode coverage ----
+
+        private const string User = "adversarial-user";
+        private const string Password = "correct horse battery staple";
+
+        private static string Flip(string base64Url)
+        {
+            // Flip one bit in the middle of the decoded payload; stays valid base64url.
+            string padded = base64Url.Replace('-', '+').Replace('_', '/');
+            padded = padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
+            byte[] bytes = Convert.FromBase64String(padded);
+            bytes[bytes.Length / 2] ^= 0x01;
+            return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        private static void Login(string serverSetup, string record, out StartServerLoginResult server, out FinishClientLoginResult client)
+        {
+            var c = new OpaqueClient();
+            var s = new OpaqueServer();
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartLogin(serverSetup, start!.StartLoginRequest, User, record, out StartServerLoginResult? serverResult, out _));
+            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, serverResult!.LoginResponse, Password, out FinishClientLoginResult? clientResult));
+            server = serverResult;
+            client = clientResult!;
+        }
+
+        [TestMethod]
+        public void DeploymentFaultsAreNotSwallowedButProtocolFaultsAre()
+        {
+            Assert.ThrowsException<DllNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new DllNotFoundException()));
+            Assert.ThrowsException<EntryPointNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new EntryPointNotFoundException(), out _));
+            Assert.ThrowsException<BadImageFormatException>(() => FunctionHelper.TryExecute<string>(() => throw new BadImageFormatException()));
+
+            Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException()));
+            Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException(), out Exception? e));
+            Assert.IsInstanceOfType(e, typeof(InvalidOperationException));
+        }
+
+        [TestMethod]
+        public void TamperedFinalizationIsRejectedByServer()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            Login(setup, record, out StartServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsFalse(new OpaqueServer().FinishLogin(server.ServerLoginState, Flip(client.FinishLoginRequest), out string? key));
+            Assert.IsTrue(string.IsNullOrEmpty(key));
+        }
+
+        [TestMethod]
+        public void FinalizationFromAnotherSessionIsRejected()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            Login(setup, record, out StartServerLoginResult serverA, out _);
+            Login(setup, record, out _, out FinishClientLoginResult clientB);
+
+            Assert.IsFalse(new OpaqueServer().FinishLogin(serverA.ServerLoginState, clientB.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void TamperedServerResponseYieldsNoKeysOnClient()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            var c = new OpaqueClient();
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(new OpaqueServer().StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? server, out _));
+
+            Assert.IsFalse(c.FinishLogin(start.ClientLoginState, Flip(server!.LoginResponse), Password, out FinishClientLoginResult? result));
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public void UnknownUserGetsAResponseButCannotAuthenticate()
+        {
+            OpaqueServer server = new OpaqueServer();
+            OpaqueClient client = new OpaqueClient();
+            Assert.IsTrue(server.CreateSetup(out string? setup));
+            Assert.IsTrue(client.StartLogin(Password, out StartClientLoginResult? start));
+
+            // No registration record: the server must still answer (no user enumeration here).
+            Assert.IsTrue(server.StartLogin(setup!, start!.StartLoginRequest, "nobody", null, out StartServerLoginResult? response, out _));
+            Assert.IsFalse(client.FinishLogin(start.ClientLoginState, response!.LoginResponse, Password, out FinishClientLoginResult? result));
+            Assert.IsNull(result);
+        }
+
+        [TestMethod]
+        public void EachLoginProducesAFreshSessionKey()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            Login(setup, record, out _, out FinishClientLoginResult first);
+            Login(setup, record, out _, out FinishClientLoginResult second);
+
+            Assert.AreNotEqual(first.SessionKey, second.SessionKey);
+            Assert.AreEqual(first.ExportKey, second.ExportKey);
+        }
+
+        [TestMethod]
+        public void GarbageProtocolInputReturnsFalseInsteadOfThrowingOrCrashing()
+        {
+            OpaqueServer server = new OpaqueServer();
+            OpaqueClient client = new OpaqueClient();
+            Assert.IsTrue(server.CreateSetup(out string? setup));
+
+            foreach (string garbage in new[] { "x", "!!!", "AAAA", new string('A', 200), "////" })
+            {
+                Assert.IsFalse(server.GetPublicKey(garbage, out _));
+                Assert.IsFalse(server.CreateRegistrationResponse(garbage, User, garbage, out _));
+                Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, garbage, out _));
+                Assert.IsFalse(server.StartLogin(setup!, garbage, User, null, out _, out _));
+                Assert.IsFalse(server.FinishLogin(garbage, garbage, out _));
+                Assert.IsFalse(client.FinishRegistration(Password, garbage, garbage, out _));
+                Assert.IsFalse(client.FinishLogin(garbage, garbage, Password, out _));
+            }
+        }
+
+        [TestMethod]
+        public void OversizedInputsAreRejectedBeforeNativeInvocation()
+        {
+            OpaqueServer server = new OpaqueServer();
+            string huge = new string('A', StringParamIsEmptyException.MaximumProtocolMessageLength + 1);
+            string longId = new string('u', StringParamIsEmptyException.MaximumIdentifierLength + 1);
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.GetPublicKey(huge, out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartLogin("a", "a", "u", null, longId, null, out _, out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', StringParamIsEmptyException.MaximumPasswordLength + 1), out _));
         }
     }
 }

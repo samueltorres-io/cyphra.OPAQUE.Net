@@ -4,6 +4,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Mutex, OnceLock};
+use zeroize::{Zeroize, Zeroizing};
 
 pub const MAX_FFI_STRING_LEN: usize = 64 * 1024;
 
@@ -20,7 +21,7 @@ pub enum FfiStringError {
     TooLong,
 }
 
-pub fn rust_string_to_csharp_string_handle(s: String) -> *mut c_char {
+pub fn rust_string_to_csharp_string_handle(s: &str) -> *mut c_char {
     let Ok(value) = CString::new(s) else {
         return std::ptr::null_mut();
     };
@@ -34,7 +35,7 @@ pub fn rust_string_to_csharp_string_handle(s: String) -> *mut c_char {
     }
 }
 
-pub fn csharp_string_to_rust_string(s: *const c_char) -> Result<String, FfiStringError> {
+pub fn csharp_string_to_rust_string(s: *const c_char) -> Result<Zeroizing<String>, FfiStringError> {
     if s.is_null() {
         return Err(FfiStringError::Null);
     }
@@ -52,7 +53,7 @@ pub fn csharp_string_to_rust_string(s: *const c_char) -> Result<String, FfiStrin
         return Err(FfiStringError::TooLong);
     }
     let value = std::str::from_utf8(bytes).map_err(|_| FfiStringError::InvalidUtf8)?;
-    Ok(value.to_owned())
+    Ok(Zeroizing::new(value.to_owned()))
 }
 
 pub fn ffi_boundary<T>(action: impl FnOnce() -> T, fallback: T) -> T {
@@ -70,6 +71,13 @@ pub extern "C" fn free_string(s: *mut c_char) {
         .map(|mut handles| handles.remove(&(s as usize)))
         .unwrap_or(false);
     if owned {
-        ffi_boundary(|| unsafe { drop(CString::from_raw(s)) }, ());
+        ffi_boundary(
+            || {
+                // Strings handed to C# may carry session keys or export keys: wipe before freeing.
+                let mut bytes = unsafe { CString::from_raw(s) }.into_bytes();
+                bytes.zeroize();
+            },
+            (),
+        );
     }
 }
