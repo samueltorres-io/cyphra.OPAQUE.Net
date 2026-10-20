@@ -101,7 +101,7 @@ namespace Test
             string userIdentifier = "user123";
             string password = "hunter42";
 
-            KSFConfig config = KSFConfig.Create(KSFConfigType.RfcDraftRecommended);
+            KSFConfig config = KSFConfig.CreateRfcDraftRecommended(true);
 
             SetupAndRegister(userIdentifier, password, null, null, config, out string serverSetup, out string registrationRecord,
                 out string exportKey, out string serverStaticPublicKey);
@@ -214,7 +214,7 @@ namespace Test
                 throw new Exception();
             }
 
-            KSFConfig config = KSFConfig.Create(KSFConfigType.RfcDraftRecommended);
+            KSFConfig config = KSFConfig.CreateRfcDraftRecommended(true);
 
             bool finishLoginSucceeded = client.FinishLogin(clientLoginResult.ClientLoginState, serverLoginResult!.LoginResponse, password,
                 null, null, config, out FinishClientLoginResult? finishClientLoginResult);
@@ -485,6 +485,47 @@ namespace Test
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartLogin("a", "a", "u", null, longId, null, out _, out _));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', StringParamIsEmptyException.MaximumPasswordLength + 1), out _));
+        }
+  
+        [TestMethod]
+        public void NulAndUnpairedSurrogatesAreRejected()
+        {
+            var client = new OpaqueClient();
+            var server = new OpaqueServer();
+            foreach (string bad in new[] { "abc\0TAIL", "\0", "pw\uD800", "\uDC00pw" })
+            {
+                Assert.ThrowsException<ArgumentException>(() => client.StartRegistration(bad, out _));
+                Assert.ThrowsException<ArgumentException>(() => client.StartLogin(bad, out _));
+                Assert.ThrowsException<ArgumentException>(() => server.CreateRegistrationResponse("a", bad, "a", out _));
+                Assert.ThrowsException<ArgumentException>(() => server.StartLogin("a", "a", "u", null, bad, null, out _, out _));
+            }
+        }
+
+        [TestMethod]
+        public void LengthLimitIsMeasuredInUtf8Bytes()
+        {
+            var client = new OpaqueClient();
+            // 342 CJK chars = 1026 bytes: used to return a silent false.
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('\u4e2d', 342), out _));
+            Assert.IsTrue(client.StartRegistration(new string('\u4e2d', 341), out _));
+        }
+
+        [TestMethod]
+        public void RfcDraftProfileRequiresOptInAndInvalidEnumIsRejected()
+        {
+            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.Create(KSFConfigType.RfcDraftRecommended));
+            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create((KSFConfigType)99));
+        }
+
+        [TestMethod]
+        public void RegistrationRequestWithTrailingBytesIsRejected()
+        {
+            var server = new OpaqueServer();
+            Assert.IsTrue(server.CreateSetup(out string? setup));
+            Assert.IsTrue(new OpaqueClient().StartRegistration(Password, out StartClientRegistrationResult? start));
+            Assert.IsTrue(server.CreateRegistrationResponse(setup!, User, start!.RegistrationRequest, out _));
+            Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, start.RegistrationRequest + "AAAA", out _));
         }
     }
 }

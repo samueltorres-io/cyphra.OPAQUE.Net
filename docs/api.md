@@ -39,11 +39,11 @@ The state and request properties are flow-specific. Do not reuse them across use
 `KSFConfig.Create` supports:
 
 - `MemoryConstrained` — the default;
-- `RfcDraftRecommended` — the RFC draft recommendation;
+- `RfcDraftRecommended` — the RFC draft recommendation (about 2 GiB); `KSFConfig.Create` throws for it, use `CreateRfcDraftRecommended(true)`;
 - `Custom` — explicit values within the library's validated limits.
 
 `KSFConfig` values are serialized into the native protocol call. Keep registration and login settings consistent.
 
 ## Exceptions and return values
 
-`StringParamIsEmptyException` identifies required string arguments that are empty. Native failures are generally represented by `false` and a null output; server login also provides an `Exception` output for infrastructure failures. Applications should normalize these into safe, non-enumerating authentication responses.
+`StringParamIsEmptyException` identifies required string arguments that are empty. Passwords and identifiers are validated before the native call: embedded `\0` and unpaired surrogates throw `ArgumentException`, and the 1024 limit is measured in UTF-8 bytes (`ArgumentOutOfRangeException`). No Unicode normalization is applied, so NFC and NFD forms of the same text are different passwords; normalize in the application if needed. Native failures are generally represented by `false` and a null output; server login also provides an `Exception` output for infrastructure failures. Applications should normalize these into safe, non-enumerating authentication responses.
