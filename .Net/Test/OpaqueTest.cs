@@ -539,5 +539,12 @@ namespace Test
             Assert.IsTrue(server.CreateRegistrationResponse(setup!, User, start!.RegistrationRequest, out _));
             Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, start.RegistrationRequest + "AAAA", out _));
         }
+  
+        [TestMethod]
+        public void ServerLoginStateIsNotRevealedByToString()
+        {
+            var result = new StartServerLoginResult("SECRET-STATE", "response");
+            StringAssert.DoesNotMatch(result.ToString()!, new System.Text.RegularExpressions.Regex("SECRET-STATE"));
+        }
     }
 }

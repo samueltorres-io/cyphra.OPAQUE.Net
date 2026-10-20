@@ -31,6 +31,7 @@ OPAQUE does not replace TLS, endpoint security, rate limiting, account recovery 
 - use authenticated transport and bind the protocol to the intended account/context;
 - rate-limit and monitor login attempts;
 - treat export keys and session keys as secrets;
+- keep `StartServerLoginResult.ServerLoginState` on the server only: it holds the session key in clear and the material to forge the client's finish message, so whoever has it can finish the login without the password. Never send it to the client or put it in a cookie, URL, log or shared cache; store it server-side with a short TTL, call `FinishLogin` at most once per state, and delete it afterwards (the library does not invalidate it, so a replayed state and finish message authenticate again);
 - avoid revealing whether a user exists or which protocol step failed;
 - pin or validate the server public key when the application threat model requires it;
 - keep native assets aligned with their runtime identifiers.

@@ -32,7 +32,7 @@ The package namespace is `OPAQUE.Net`.
 | `StartServerLoginResult` | `ServerLoginState`, `LoginResponse` |
 | `FinishClientLoginResult` | `FinishLoginRequest`, `SessionKey`, `ExportKey`, `ServerStaticPublicKey` |
 
-The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
+`ServerLoginState` is a server-side secret (see [security](security.md)): send only `LoginResponse` to the client, and use each state once. The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
 
 ## `KSFConfig`
 

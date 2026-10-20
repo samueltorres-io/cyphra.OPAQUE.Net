@@ -81,6 +81,7 @@ if (!client.FinishLogin(
     out FinishClientLoginResult? clientFinish) || clientFinish is null)
     throw new AuthenticationException("Invalid credentials.");
 
+// ServerLoginState stays on the server (short TTL, single use); only LoginResponse went to the client.
 if (!server.FinishLogin(
     serverStart.ServerLoginState,
     clientFinish.FinishLoginRequest,
