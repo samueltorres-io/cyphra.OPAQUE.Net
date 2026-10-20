@@ -14,7 +14,7 @@ The package stores platform-specific binaries under `runtimes/<rid>/native/`. Th
 
 ## State and secrets
 
-Protocol state is deliberately carried between individual client and server calls. `ServerLoginState` is a bearer secret and must never leave the server. The library does not provide a database, session store, transport, account service, or secret manager. The application owns:
+Protocol state is deliberately carried between individual client and server calls. Server login state is sealed (authenticated encryption keyed from `serverSetup`, see `src/seal.rs`), which keeps the server stateless; the legacy raw `ServerLoginState` is a bearer secret and must never leave the server. The library does not provide a database, session store, transport, account service, or secret manager. The application owns:
 
 - protecting `serverSetup`;
 - associating `RegistrationRecord` with the correct account;

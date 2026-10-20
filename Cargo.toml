@@ -27,6 +27,9 @@ base64 = "0.21.7"
 libc = "0.2"
 generic-array = "0.14"
 zeroize = "1.8"
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+hkdf = "0.12"
+sha2 = "0.10"
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.

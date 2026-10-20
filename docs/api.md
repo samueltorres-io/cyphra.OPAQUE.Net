@@ -18,9 +18,9 @@ The package namespace is `OPAQUE.Net`.
 - `CreateSetup(out serverSetup)` creates the server's long-term setup secret.
 - `GetPublicKey(serverSetup, out publicKey)` derives the corresponding public key.
 - `CreateRegistrationResponse(serverSetup, userIdentifier, registrationRequest, out response)` processes client registration.
-- `StartLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` starts server login and exposes infrastructure failures separately.
-- The extended `StartLogin` overload accepts `clientIdentifier` and `serverIdentifier`.
-- `FinishLogin(serverLoginState, finishLoginRequest, out serverSessionKey)` completes login.
+- `StartSealedLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` starts server login, returns the server state sealed under the setup, and exposes infrastructure failures separately. The extended overload accepts `clientIdentifier` and `serverIdentifier`.
+- `FinishSealedLogin(serverSetup, sealedLoginState, finishLoginRequest, out serverSessionKey)` completes login. It fails for a state that was altered, expired (2 minutes), or sealed under another setup.
+- `StartLogin` / `FinishLogin(serverLoginState, …)` are obsolete: the raw state they use is a bearer secret (see [security](security.md)).
 
 ## Result objects
 
@@ -29,10 +29,11 @@ The package namespace is `OPAQUE.Net`.
 | `StartClientRegistrationResult` | `ClientRegistrationState`, `RegistrationRequest` |
 | `FinishClientRegistrationResult` | `RegistrationRecord`, `ExportKey`, `ServerStaicPublicKey` |
 | `StartClientLoginResult` | `ClientLoginState`, `StartLoginRequest` |
-| `StartServerLoginResult` | `ServerLoginState`, `LoginResponse` |
+| `StartSealedServerLoginResult` | `SealedLoginState`, `LoginResponse` |
+| `StartServerLoginResult` (obsolete) | `ServerLoginState`, `LoginResponse` |
 | `FinishClientLoginResult` | `FinishLoginRequest`, `SessionKey`, `ExportKey`, `ServerStaticPublicKey` |
 
-`ServerLoginState` is a server-side secret (see [security](security.md)): send only `LoginResponse` to the client, and use each state once. The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
+Send only `LoginResponse` to the client. `SealedLoginState` is not single-use: to refuse a replay inside its two-minute window, remember it (or its hash) until it expires and reject a second use. The raw `ServerLoginState` of the obsolete API is a server-side secret (see [security](security.md)). The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
 
 ## `KSFConfig`
 

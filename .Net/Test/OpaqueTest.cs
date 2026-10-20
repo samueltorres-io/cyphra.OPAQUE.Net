@@ -1,3 +1,5 @@
+// The legacy raw-state API is obsolete on purpose; these tests still cover it (and its replacement).
+#pragma warning disable CS0618
 using OPAQUE.Net;
 using OPAQUE.Net.Helpers;
 using OPAQUE.Net.Types.Exceptions;
@@ -545,6 +547,75 @@ namespace Test
         {
             var result = new StartServerLoginResult("SECRET-STATE", "response");
             StringAssert.DoesNotMatch(result.ToString()!, new System.Text.RegularExpressions.Regex("SECRET-STATE"));
+        }
+  
+        private static void SealedLogin(string setup, string record, out StartSealedServerLoginResult server, out FinishClientLoginResult client)
+        {
+            var c = new OpaqueClient();
+            var s = new OpaqueServer();
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartSealedLogin(setup, start!.StartLoginRequest, User, record, out StartSealedServerLoginResult? serverResult, out _));
+            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, serverResult!.LoginResponse, Password, out FinishClientLoginResult? clientResult));
+            server = serverResult;
+            client = clientResult!;
+        }
+
+        private static byte[] FromBase64Url(string s)
+        {
+            s = s.Replace('-', '+').Replace('_', '/');
+            return Convert.FromBase64String(s.PadRight(s.Length + (4 - s.Length % 4) % 4, '='));
+        }
+
+        [TestMethod]
+        public void SealedLoginAgreesOnSessionKeyAndHidesIt()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsTrue(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, out string? key));
+            Assert.AreEqual(client.SessionKey, key);
+
+            byte[] blob = FromBase64Url(server.SealedLoginState);
+            byte[] sessionKey = FromBase64Url(client.SessionKey);
+            Assert.IsFalse(blob.AsSpan().IndexOf(sessionKey.AsSpan(0, 16)) >= 0, "session key must not appear in the sealed state");
+        }
+
+        [TestMethod]
+        public void SealedStateRejectsTamperingForeignSetupAndLegacyMixing()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+
+            Assert.IsFalse(s.FinishSealedLogin(setup, Flip(server.SealedLoginState), client.FinishLoginRequest, out _));
+            Assert.IsTrue(s.CreateSetup(out string? otherSetup));
+            Assert.IsFalse(s.FinishSealedLogin(otherSetup!, server.SealedLoginState, client.FinishLoginRequest, out _));
+            // A sealed state is not a raw state, and a raw state is not accepted as sealed.
+            Assert.IsFalse(s.FinishLogin(server.SealedLoginState, client.FinishLoginRequest, out _));
+            Assert.IsTrue(new OpaqueClient().StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? legacy, out _));
+            Assert.IsFalse(s.FinishSealedLogin(setup, legacy!.ServerLoginState, client.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void SealedStateFromAnotherSessionIsRejected()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult serverA, out _);
+            SealedLogin(setup, record, out _, out FinishClientLoginResult clientB);
+
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, serverA.SealedLoginState, clientB.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void SealedLoginValidatesArguments()
+        {
+            var s = new OpaqueServer();
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("", "a", "a", out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "", "a", out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "a", "", out _));
+            Assert.ThrowsException<ArgumentException>(() => s.StartSealedLogin("a", "a", "u\0x", null, out _, out _));
+            Assert.IsFalse(s.FinishSealedLogin("a", "a", "a", out _));
         }
     }
 }
