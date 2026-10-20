@@ -33,7 +33,7 @@ The package namespace is `OPAQUE.Net`.
 | `StartServerLoginResult` (obsolete) | `ServerLoginState`, `LoginResponse` |
 | `FinishClientLoginResult` | `FinishLoginRequest`, `SessionKey`, `ExportKey`, `ServerStaticPublicKey` |
 
-Send only `LoginResponse` to the client. `SealedLoginState` is not single-use: to refuse a replay inside its two-minute window, remember it (or its hash) until it expires and reject a second use. The raw `ServerLoginState` of the obsolete API is a server-side secret (see [security](security.md)). The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
+Send only `LoginResponse` to the client. `SealedLoginState` is valid for two minutes but not single-use by itself: use `FinishSealedLogin(serverSetup, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)` to refuse a second use. `tryConsume` receives a stable id of the state and must atomically record it and return true only the first time (shared storage such as Redis `SET NX` with a TTL of at least 120 s for several instances; `LoginStateReplayCache.TryConsume` for a single instance). It runs only after the state and the finish message verify, so a bad finish does not burn the state. The raw `ServerLoginState` of the obsolete API is a server-side secret (see [security](security.md)). The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
 
 ## `KSFConfig`
 

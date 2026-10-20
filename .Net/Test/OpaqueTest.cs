@@ -1,4 +1,4 @@
-// The legacy raw-state API is obsolete on purpose; these tests still cover it (and its replacement).
+﻿// The legacy raw-state API is obsolete on purpose; these tests still cover it (and its replacement).
 #pragma warning disable CS0618
 using OPAQUE.Net;
 using OPAQUE.Net.Helpers;
@@ -595,6 +595,53 @@ namespace Test
             Assert.IsTrue(new OpaqueClient().StartLogin(Password, out StartClientLoginResult? start));
             Assert.IsTrue(s.StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? legacy, out _));
             Assert.IsFalse(s.FinishSealedLogin(setup, legacy!.ServerLoginState, client.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void SealedStateCanBeConsumedOnlyOnce()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+            var cache = new LoginStateReplayCache();
+
+            Assert.IsTrue(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? key));
+            Assert.IsNotNull(key);
+            Assert.IsFalse(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? replayKey));
+            Assert.IsNull(replayKey);
+        }
+
+        [TestMethod]
+        public void ReencodedSealedStateIsNotAReplayBypass()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState + "=", client.FinishLoginRequest, _ => true, out _));
+        }
+
+        [TestMethod]
+        public void ThrowingConsumerNeverReleasesTheKey()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            string? key = "x";
+
+            Assert.ThrowsException<InvalidOperationException>(() =>
+                new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, _ => throw new InvalidOperationException(), out key));
+            Assert.IsNull(key);
+        }
+
+        [TestMethod]
+        public void BadFinishDoesNotBurnTheState()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+            var cache = new LoginStateReplayCache();
+
+            Assert.IsFalse(s.FinishSealedLogin(setup, server.SealedLoginState, Flip(client.FinishLoginRequest), cache.TryConsume, out _));
+            Assert.IsTrue(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out _));
         }
 
         [TestMethod]

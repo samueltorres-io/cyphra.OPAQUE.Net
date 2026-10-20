@@ -196,6 +196,41 @@ namespace OPAQUE.Net
             return !string.IsNullOrEmpty(serverSessionKey);
         }
 
+        /// <summary>
+        /// Like <see cref="FinishSealedLogin(string, string, string, out string?)"/> but enforces single use:
+        /// after the state and the client's finish message verify, <paramref name="tryConsume"/> is called once
+        /// with a stable identifier of the state (SHA-256 hex of the sealed value). It must atomically record
+        /// the identifier and return true only the first time it sees it; on false the login fails and no key is
+        /// returned. Back it with storage shared by all instances (e.g. Redis <c>SET NX</c> with a TTL of at
+        /// least 120 s), or use <see cref="LoginStateReplayCache"/> for a single instance.
+        /// </summary>
+        public bool FinishSealedLogin(string serverSetup, string sealedLoginState, string finishLoginRequest,
+            Func<string, bool> tryConsume, out string? serverSessionKey)
+        {
+            ArgumentNullException.ThrowIfNull(tryConsume);
+            if (!FinishSealedLogin(serverSetup, sealedLoginState, finishLoginRequest, out serverSessionKey))
+            {
+                return false;
+            }
+
+            // The native base64url decoder is canonical (no padding, no spare bits), so each blob has exactly
+            // one string form and hashing the string cannot be dodged by re-encoding it.
+            bool first = false;
+            try
+            {
+                first = tryConsume(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sealedLoginState))));
+            }
+            finally
+            {
+                if (!first)
+                {
+                    serverSessionKey = null; // also when tryConsume throws: never hand out an unconsumed key
+                }
+            }
+
+            return first;
+        }
+
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StringHandle create_server_setup();
 
