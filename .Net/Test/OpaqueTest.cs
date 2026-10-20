@@ -511,6 +511,18 @@ namespace Test
         }
 
         [TestMethod]
+        public void ValidBoundaryInputsStillAccepted()
+        {
+            var client = new OpaqueClient();
+            Assert.IsTrue(client.StartRegistration(new string('p', 1024), out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('p', 1025), out _));
+            // Valid surrogate pairs (4 bytes each) and NFD text are legitimate; 256 emoji = 1024 bytes.
+            Assert.IsTrue(client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 256)), out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 257)), out _));
+            Assert.IsTrue(client.StartRegistration("cafe\u0301", out _));
+        }
+
+        [TestMethod]
         public void RfcDraftProfileRequiresOptInAndInvalidEnumIsRejected()
         {
             Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.Create(KSFConfigType.RfcDraftRecommended));
