@@ -9,19 +9,35 @@ namespace OPAQUE.Net
     public sealed class LoginStateReplayCache
     {
         // Sealed states live 120 s; keep ids longer to cover clock skew.
-        private static readonly TimeSpan Retention = TimeSpan.FromMinutes(5);
-        private readonly ConcurrentDictionary<string, DateTime> _seen = new();
+        private static readonly long RetentionMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+        private readonly ConcurrentDictionary<string, long> _seen = new();
+        private long _nextPrune;
 
         /// <summary>True the first time an id is seen within the retention window, false afterwards.</summary>
         public bool TryConsume(string id)
         {
-            DateTime now = DateTime.UtcNow;
-            foreach (var old in _seen.Where(kv => now - kv.Value > Retention))
+            ArgumentException.ThrowIfNullOrEmpty(id);
+            long now = Environment.TickCount64; // monotonic: immune to wall-clock changes
+            Prune(now);
+            return _seen.TryAdd(id, now);
+        }
+
+        // Sweeping once per retention/5 keeps TryConsume O(1) amortized instead of scanning every call.
+        private void Prune(long now)
+        {
+            long next = Interlocked.Read(ref _nextPrune);
+            if (now < next || Interlocked.CompareExchange(ref _nextPrune, now + RetentionMs / 5, next) != next)
             {
-                _seen.TryRemove(old.Key, out _);
+                return;
             }
 
-            return _seen.TryAdd(id, now);
+            foreach (var kv in _seen)
+            {
+                if (now - kv.Value > RetentionMs)
+                {
+                    _seen.TryRemove(kv);
+                }
+            }
         }
     }
 }

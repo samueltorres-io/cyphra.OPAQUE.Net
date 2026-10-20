@@ -213,13 +213,22 @@ namespace OPAQUE.Net
                 return false;
             }
 
-            if (tryConsume(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sealedLoginState)))))
+            // The native base64url decoder is canonical (no padding, no spare bits), so each blob has exactly
+            // one string form and hashing the string cannot be dodged by re-encoding it.
+            bool first = false;
+            try
             {
-                return true;
+                first = tryConsume(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sealedLoginState))));
+            }
+            finally
+            {
+                if (!first)
+                {
+                    serverSessionKey = null; // also when tryConsume throws: never hand out an unconsumed key
+                }
             }
 
-            serverSessionKey = null;
-            return false;
+            return first;
         }
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]

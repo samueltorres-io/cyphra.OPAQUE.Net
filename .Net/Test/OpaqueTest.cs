@@ -612,6 +612,27 @@ namespace Test
         }
 
         [TestMethod]
+        public void ReencodedSealedStateIsNotAReplayBypass()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState + "=", client.FinishLoginRequest, _ => true, out _));
+        }
+
+        [TestMethod]
+        public void ThrowingConsumerNeverReleasesTheKey()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            string? key = "x";
+
+            Assert.ThrowsException<InvalidOperationException>(() =>
+                new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, _ => throw new InvalidOperationException(), out key));
+            Assert.IsNull(key);
+        }
+
+        [TestMethod]
         public void BadFinishDoesNotBurnTheState()
         {
             SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
