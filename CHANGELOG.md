@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Native dependencies bumped:** `argon2` 0.6, `hkdf` 0.13 (with `sha2` 0.11, which it requires), `chacha20poly1305` 0.11, `base64` 0.23, `libc`, `zeroize`, plus a full `Cargo.lock` refresh. Argon2id, HKDF-SHA512 and XChaCha20-Poly1305 outputs are byte-identical to the previous versions (checked with fixed vectors), so existing registrations and sealed states stay valid. `generic-array` stays on 0.14: opaque-ke 3.0's `Ksf` trait is defined over it, and 0.14.9 deprecates its API, so the use is scoped with `#[allow(deprecated)]`.
+- The `opaque-ke` `argon2` feature is no longer enabled (the library uses its own Argon2 key stretching), which removes `argon2` 0.5, `blake2` 0.10 and `password-hash` 0.5 from the build.
+- **Packaging fix.** The `.nupkg` was produced without any `runtimes/<rid>/native` entries (`<None Update>` is dropped by the pack task), which failed the publish verification step. The native libraries are now declared with `Include`.
+- New `deny.toml` for `cargo deny check` (licenses, bans, sources, advisories).
+
 ## 1.6.0
 
 - **BREAKING: `RfcDraftRecommended` memory is now exactly 2^21 KiB** (it was 2^21 - 1, which Argon2 rounds down), matching draft-irtf-cfrg-opaque-16. Records created with this profile no longer authenticate and must be re-registered; `MemoryConstrained` and `Custom` are unchanged.

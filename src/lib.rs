@@ -11,6 +11,10 @@ use opaque_ke::{
 };
 
 use base64::{engine::general_purpose as b64, Engine as _};
+// generic-array 0.14.9+ deprecates its whole API in favour of 1.x, but opaque-ke 3.0's `Ksf` trait is
+// defined over 0.14 types, so they cannot be avoided until opaque-ke moves. Scoped to the `Ksf` impl
+// (not crate-wide) so deprecations elsewhere still fail the build.
+#[allow(deprecated)]
 use generic_array::{ArrayLength, GenericArray};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -68,6 +72,7 @@ const MAX_CUSTOM_PARALLELISM: u32 = 16;
 
 type JsResult<T> = Result<T, Error>;
 
+#[allow(deprecated)]
 impl Ksf for types::CustomKsf {
     fn hash<L: ArrayLength<u8>>(
         &self,
