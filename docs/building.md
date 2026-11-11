@@ -51,10 +51,10 @@ file .Net/OPAQUE.Net/libopaque.so
 
 ## Linux compatibility build
 
-Install `cargo-zigbuild`, add the Rust targets, and use the `.2.17` suffix:
+Install Zig and `cargo-zigbuild` from the hash-pinned wheels CI uses (not `cargo install`, which cannot be checksum-pinned), add the Rust targets, and use the `.2.17` suffix:
 
 ```sh
-cargo install cargo-zigbuild
+python3 -m pip install --user --require-hashes -r .github/requirements-zig.txt
 rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 cargo zigbuild --release --locked --target x86_64-unknown-linux-gnu.2.17
 cargo zigbuild --release --locked --target aarch64-unknown-linux-gnu.2.17
