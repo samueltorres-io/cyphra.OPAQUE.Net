@@ -23,7 +23,7 @@ p256 = { version = "0.13", default-features = false, features = [
   "hash2curve",
   "voprf",
 ], optional = true }
-base64 = "0.21.7"
+base64 = "0.23.1"
 libc = "0.2"
 generic-array = "0.14"
 zeroize = "1.8"
