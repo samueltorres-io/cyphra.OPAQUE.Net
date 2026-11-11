@@ -17,7 +17,10 @@ namespace OPAQUE.Net
         public bool TryConsume(string id)
         {
             ArgumentException.ThrowIfNullOrEmpty(id);
-            long now = Environment.TickCount64; // monotonic: immune to wall-clock changes
+            // Wall clock on purpose: the state's expiry is enforced against the wall clock in the native
+            // library, so retention has to follow the same clock (a backward step then keeps ids longer
+            // instead of dropping them while the state is still valid).
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             Prune(now);
             return _seen.TryAdd(id, now);
         }
@@ -26,7 +29,9 @@ namespace OPAQUE.Net
         private void Prune(long now)
         {
             long next = Interlocked.Read(ref _nextPrune);
-            if (now < next || Interlocked.CompareExchange(ref _nextPrune, now + RetentionMs / 5, next) != next)
+            long interval = RetentionMs / 5;
+            // next - now > interval only after a backward clock step: sweep right away and reschedule.
+            if ((now < next && next - now <= interval) || Interlocked.CompareExchange(ref _nextPrune, now + interval, next) != next)
             {
                 return;
             }

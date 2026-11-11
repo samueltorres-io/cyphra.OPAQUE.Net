@@ -5,7 +5,7 @@
   -->
   <Target Name="OpaqueWarnUnsupportedRuntimeIdentifier" BeforeTargets="ResolvePackageAssets" Condition="'$(RuntimeIdentifier)' != ''">
     <PropertyGroup>
-      <_OpaqueRidUnsupported Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', 'musl|bionic|android|ios|tvos|browser|wasi')) Or !$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '-(x64|arm64)$'))">true</_OpaqueRidUnsupported>
+      <_OpaqueRidUnsupported Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', 'musl|bionic|android|ios|tvos|maccatalyst|browser|wasi|freebsd|illumos|solaris|haiku')) Or !$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '-(x64|arm64)$'))">true</_OpaqueRidUnsupported>
     </PropertyGroup>
     <Warning Condition="'$(_OpaqueRidUnsupported)' == 'true'"
              Code="OPAQUE001"
