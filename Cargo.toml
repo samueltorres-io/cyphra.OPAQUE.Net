@@ -1,5 +1,7 @@
 [package]
 name = "opaque"
+# Inherited from the upstream project; not the package version. The NuGet version lives in
+# .Net/OPAQUE.Net/OPAQUE.Net.csproj and the Rust crate is never published, so do not bump this per release.
 version = "0.8.0"
 authors = [
   "Stefan Oestreicher <oestef@gmail.com>",
