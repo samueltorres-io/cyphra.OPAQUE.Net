@@ -14,7 +14,7 @@ Please search existing issues and pull requests before starting larger work. For
 
 ## Development requirements
 
-- .NET SDK 8 or later;
+- .NET SDK 10 (it builds both `net8.0` and `net10.0`);
 - Rust and `rustup`, using the version pinned by `rust-toolchain.toml`;
 - the Rust targets required for the platform you are building;
 - a native library for the host runtime, or a build of the Rust library as described in [`docs/building.md`](docs/building.md).

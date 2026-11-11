@@ -45,7 +45,7 @@ Para o fluxo completo de registro e login, resultados, identificadores, parâmet
 
 ## Plataformas suportadas
 
-O pacote usa .NET 8 e inclui bibliotecas nativas para Windows, Linux e macOS, nas arquiteturas x64 e arm64.
+O pacote tem como alvo .NET 8 e .NET 10 e inclui bibliotecas nativas para Windows, Linux e macOS, nas arquiteturas x64 e arm64.
 
 ## Contribuição e segurança
 

@@ -1,6 +1,6 @@
 # Building and testing
 
-The package targets .NET 8 and ships the Rust native library for six runtime identifiers:
+The package targets .NET 8 and .NET 10 (`net8.0` and `net10.0`) and ships the Rust native library for six runtime identifiers:
 
 | RID | Rust target | Repository asset |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ Only the six RIDs above have a native library. Linux support is **glibc only**: 
 
 ## Prerequisites
 
-- .NET SDK 8 and 10 (the test project targets `net8.0` and `net10.0`; with only SDK 8 add `-f net8.0` to `dotnet test`);
+- .NET SDK 10 (builds both target frameworks; the library and the test project target `net8.0` and `net10.0`) and SDK 8 or its runtime to run the `net8.0` tests;
 - `rustup` and the toolchain pinned in `rust-toolchain.toml`;
 - the Rust target for the platform being built;
 - `cargo-zigbuild` and Zig for Linux cross-compilation.

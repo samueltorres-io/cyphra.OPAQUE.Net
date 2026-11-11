@@ -48,7 +48,7 @@ For the complete registration and login sequence, result handling, identifiers, 
 
 ## Supported platforms
 
-The package targets .NET 8 and includes native binaries for Windows, Linux, and macOS on x64 and arm64.
+The package targets .NET 8 and .NET 10 and includes native binaries for Windows, Linux, and macOS on x64 and arm64.
 
 The correct native library is selected by the .NET runtime identifier. Linux support is glibc only: Alpine/musl (`linux-musl-*`) and other runtime identifiers such as `win-x86` or `linux-arm` have no native library, and building for them emits warning `OPAQUE001`. See [supported platforms and builds](docs/building.md) for details.
 
