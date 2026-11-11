@@ -8,7 +8,8 @@
 - **Strict native library loading (F-09, F-10).** The library is loaded only from directories resolved by the .NET host; the OS search of a bare name is no longer a fallback. Load failures throw `DllNotFoundException` naming the runtime identifier and the probed (or found-but-unloadable) paths. Applications that relied on `LD_LIBRARY_PATH`/`PATH` to supply the native library must deploy it with the app (the NuGet `runtimes/<rid>/native` layout already does).
 - Building for an unsupported runtime identifier (musl, `win-x86`, `linux-arm`, mobile, browser) now warns with `OPAQUE001`. `FunctionHelper` is hidden from IntelliSense and becomes internal in 2.0.
 - **Packaging (F-11).** Source Link and embedded symbols, deterministic assembly in CI; `opaque-ke` requirement tightened to 3.0.0; tests also run on .NET 10; README documents provenance verification.
-- **CI (F-07).** Zig installed with pinned hashes, no network rustup installer, no restored cache in release builds.
+- **CI (F-07).** Zig installed with pinned hashes, no network rustup installer, no restored cache in release builds. cargo-zigbuild now comes from a hash-pinned wheel too (#15).
+- **Advisory RUSTSEC-2026-0387** (`crypto-bigint` timing) is explicitly ignored in `cargo audit`; not fixable until `opaque-ke` supports `elliptic-curve` 0.14. Affects only the optional `p256` feature. See `docs/security.md`.
 
 ## 1.5.0
 

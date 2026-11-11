@@ -45,6 +45,7 @@ OPAQUE does not replace TLS, endpoint security, rate limiting, account recovery 
 - **Key-stretching cost.** Argon2id runs only on the client during registration and login finish; the server never runs it. The RFC draft profile allocates about 2 GiB per operation and requires an explicit opt-in (`KSFConfig.CreateRfcDraftRecommended(true)`); custom profiles are capped at 256 MiB, 10 iterations and 16 lanes. Never pick the profile from untrusted input.
 - **Native library loading.** `NativeLibraryResolver` loads the library only from directories resolved by the .NET host and never falls back to the operating-system search of a bare name, so a library planted through `LD_LIBRARY_PATH`, `PATH` or the working directory is not picked up. Failures throw `DllNotFoundException` with the probed directories. Keep the application directory itself unwritable by untrusted users.
 - **Dependencies.** CI runs `cargo audit` and fails on known vulnerabilities. GitHub Actions are pinned by commit SHA.
+- **Known advisory: RUSTSEC-2026-0387 (`crypto-bigint` 0.5.5, timing variability).** Ignored in `.cargo/audit.toml` because no usable fix exists: it is pulled in only through `elliptic-curve` 0.13, which `opaque-ke` pins, and the patched `crypto-bigint` needs `elliptic-curve` 0.14. The default Ristretto255 build does no arithmetic through it; the optional `p256` Cargo feature does, so avoid that feature on hosts where an attacker can time operations until `opaque-ke` is updated. The ignore is removed once it is.
 
 ## Security-sensitive changes
 
