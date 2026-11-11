@@ -2,6 +2,10 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+// Defense in depth for CA5392: the resolver below normally loads the library. Should it ever not run,
+// the runtime's own probing is limited to the assembly directory instead of the wider default.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
+
 namespace OPAQUE.Net.Helpers
 {
     /// <summary>

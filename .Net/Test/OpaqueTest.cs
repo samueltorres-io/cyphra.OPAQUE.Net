@@ -770,6 +770,17 @@ namespace Test
         }
 
         [TestMethod]
+        public void PInvokeFallbackProbingIsLimitedToTheAssemblyDirectory()
+        {
+            var attribute = typeof(OpaqueServer).Assembly
+                .GetCustomAttributes(typeof(System.Runtime.InteropServices.DefaultDllImportSearchPathsAttribute), false)
+                .Cast<System.Runtime.InteropServices.DefaultDllImportSearchPathsAttribute>()
+                .SingleOrDefault();
+            Assert.IsNotNull(attribute, "CA5392: the assembly must restrict the default P/Invoke search paths");
+            Assert.AreEqual(System.Runtime.InteropServices.DllImportSearchPath.AssemblyDirectory, attribute.Paths);
+        }
+
+        [TestMethod]
         public void ResolverNeverFallsBackToTheOperatingSystemSearch()
         {
             string empty = Directory.CreateTempSubdirectory().FullName;

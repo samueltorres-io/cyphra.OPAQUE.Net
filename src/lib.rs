@@ -12,7 +12,7 @@ use opaque_ke::{
 
 use base64::{engine::general_purpose as b64, Engine as _};
 use generic_array::{ArrayLength, GenericArray};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 mod csharp;
 mod seal;
@@ -71,12 +71,17 @@ type JsResult<T> = Result<T, Error>;
 impl Ksf for types::CustomKsf {
     fn hash<L: ArrayLength<u8>>(
         &self,
-        input: GenericArray<u8, L>,
+        mut input: GenericArray<u8, L>,
     ) -> Result<GenericArray<u8, L>, InternalError> {
         let mut output = GenericArray::default();
-        self.argon
-            .hash_password_into(&input, &[0; argon2::RECOMMENDED_SALT_LEN], &mut output)
-            .map_err(|_| InternalError::KsfError)?;
+        // The Argon2 matrix is not wiped: it is 64 MiB or more, so the allocator returns it to the OS on
+        // free, and zeroing it with volatile writes cost ~25% of the login latency (measured).
+        let result =
+            self.argon
+                .hash_password_into(&input, &[0; argon2::RECOMMENDED_SALT_LEN], &mut output);
+        // The input is the OPRF output (a secret); wiping 64 bytes is free.
+        input.as_mut_slice().zeroize();
+        result.map_err(|_| InternalError::KsfError)?;
         Ok(output)
     }
 }
