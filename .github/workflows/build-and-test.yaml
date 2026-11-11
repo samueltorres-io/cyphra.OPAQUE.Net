@@ -266,3 +266,32 @@ jobs:
           path: .Net/OPAQUE.Net/${{ matrix.staged }}
           if-no-files-found: error
           retention-days: 7
+
+  # Packs the six freshly built libraries exactly as the release does and checks the package layout,
+  # so a pack that silently loses a platform fails here instead of when the release is cut. Skipped on
+  # release: publish.yaml packs and verifies the same way, and this would only repeat it.
+  package:
+    name: Verify package layout
+    if: github.event_name != 'release'
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Download built native libraries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: native-*
+          path: native-artifacts
+
+      - name: Pack and verify
+        run: scripts/pack-and-verify.sh native-artifacts "$RUNNER_TEMP/nuget"
