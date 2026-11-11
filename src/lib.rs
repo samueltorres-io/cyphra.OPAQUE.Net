@@ -967,31 +967,6 @@ mod tests {
     }
 
     #[test]
-    fn result_handles_ignore_double_free() {
-        let password = CString::new("password").unwrap();
-        let result = start_client_login(password.as_ptr() as *mut c_char);
-        assert!(!result.is_null());
-        types::free_start_client_login_result(result);
-        types::free_start_client_login_result(result);
-    }
-
-    #[test]
-    fn result_handles_ignore_release_as_the_wrong_type() {
-        let password = CString::new("password").unwrap();
-        let result = start_client_login(password.as_ptr() as *mut c_char);
-        assert!(!result.is_null());
-
-        // Same address, wrong type: must be a no-op, not a drop of the login result as another type.
-        types::free_start_client_registration_result(result.cast());
-        let request = types::get_start_client_login_result_request(result);
-        assert!(!request.is_null(), "handle must still be alive");
-        csharp::free_string(request as *mut c_char);
-
-        types::free_start_client_login_result(result);
-        assert!(types::get_start_client_login_result_request(result).is_null());
-    }
-
-    #[test]
     fn string_handles_ignore_double_free() {
         let handle = csharp::rust_string_to_csharp_string_handle("test");
         assert!(!handle.is_null());

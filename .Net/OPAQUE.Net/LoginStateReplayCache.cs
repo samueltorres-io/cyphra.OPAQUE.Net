@@ -11,7 +11,13 @@ namespace OPAQUE.Net
         // Sealed states live 120 s; keep ids longer to cover clock skew.
         private static readonly long RetentionMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
         private readonly ConcurrentDictionary<string, long> _seen = new();
+        private readonly TimeProvider _time;
         private long _nextPrune;
+
+        public LoginStateReplayCache() : this(TimeProvider.System) { }
+
+        // Lets tests drive the retention window without waiting for it.
+        internal LoginStateReplayCache(TimeProvider time) => _time = time;
 
         /// <summary>True the first time an id is seen within the retention window, false afterwards.</summary>
         public bool TryConsume(string id)
@@ -20,7 +26,7 @@ namespace OPAQUE.Net
             // Wall clock on purpose: the state's expiry is enforced against the wall clock in the native
             // library, so retention has to follow the same clock (a backward step then keeps ids longer
             // instead of dropping them while the state is still valid).
-            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            long now = _time.GetUtcNow().ToUnixTimeMilliseconds();
             Prune(now);
             return _seen.TryAdd(id, now);
         }

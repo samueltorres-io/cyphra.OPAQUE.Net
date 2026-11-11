@@ -290,3 +290,28 @@ pub extern "C" fn free_finish_client_registration_result(ptr: *mut FinishClientR
 
     release_result_handle(ptr);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Private types: the other tests run in parallel and allocate the real result types, so a
+    // recycled address could otherwise be handed to them between a free and the next assertion.
+    struct Probe(u8);
+    #[allow(dead_code)]
+    struct OtherProbe;
+
+    #[test]
+    fn registry_ignores_double_free_and_release_as_the_wrong_type() {
+        let ptr = into_result_handle(Probe(7));
+        assert_eq!(with_live_result_handle(ptr, |p| p.0), Some(7));
+
+        // Same address, wrong type: a no-op, the live Probe must survive.
+        release_result_handle::<OtherProbe>(ptr.cast());
+        assert_eq!(with_live_result_handle(ptr, |p| p.0), Some(7));
+
+        release_result_handle(ptr);
+        assert_eq!(with_live_result_handle(ptr, |p| p.0), None);
+        release_result_handle(ptr);
+    }
+}

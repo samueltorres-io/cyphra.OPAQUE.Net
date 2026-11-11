@@ -13,7 +13,7 @@ static LIVE_STRING_HANDLES: OnceLock<Mutex<HashSet<usize>>> = OnceLock::new();
 /// Locks a handle registry, recovering from poisoning. A panic while the guard is held cannot leave
 /// a `HashSet` of addresses in a state that matters, whereas treating poison as fatal would make
 /// every later call fail for the rest of the process.
-pub fn lock_registry<T>(registry: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(crate) fn lock_registry<T>(registry: &Mutex<T>) -> MutexGuard<'_, T> {
     registry.lock().unwrap_or_else(PoisonError::into_inner)
 }
 

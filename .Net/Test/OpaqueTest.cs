@@ -709,6 +709,39 @@ namespace Test
             Assert.AreEqual(1, winners);
         }
 
+        private sealed class ManualClock : TimeProvider
+        {
+            public DateTimeOffset Now = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        [TestMethod]
+        public void ReplayCacheKeepsIdsForTheRetentionWindowThenForgetsThem()
+        {
+            var clock = new ManualClock();
+            var cache = new LoginStateReplayCache(clock);
+
+            Assert.IsTrue(cache.TryConsume("a"));
+            clock.Now += TimeSpan.FromMinutes(4);
+            Assert.IsFalse(cache.TryConsume("a"), "still inside the 5 minute retention, longer than a state's 120 s");
+            clock.Now += TimeSpan.FromMinutes(3);
+            Assert.IsTrue(cache.TryConsume("a"), "retention elapsed: the id is pruned and memory stays bounded");
+            Assert.IsFalse(cache.TryConsume("a"));
+        }
+
+        [TestMethod]
+        public void ReplayCacheKeepsIdsWhenTheWallClockStepsBackwards()
+        {
+            var clock = new ManualClock();
+            var cache = new LoginStateReplayCache(clock);
+
+            clock.Now += TimeSpan.FromHours(1);
+            Assert.IsTrue(cache.TryConsume("a"));
+            clock.Now -= TimeSpan.FromHours(1);
+            Assert.IsFalse(cache.TryConsume("a"), "a backward step must not drop ids whose state may still be valid");
+            Assert.IsTrue(cache.TryConsume("b"));
+        }
+
         [TestMethod]
         public void KsfConfigAcceptsBoundsAndRejectsEverythingOutside()
         {
@@ -721,7 +754,10 @@ namespace Test
 
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MinimumIterations - 1, KSFConfig.MinimumMemoryKiB, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB - 1, 1));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism - 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MaximumParallelism + 1));
             Assert.ThrowsException<ArgumentException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, null));
             Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
         }

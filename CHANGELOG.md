@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **BREAKING: `RfcDraftRecommended` memory is now exactly 2^21 KiB** (it was 2^21 - 1, which Argon2 rounds down), matching draft-irtf-cfrg-opaque-16. Records created with this profile no longer authenticate and must be re-registered; `MemoryConstrained` and `Custom` are unchanged.
 - **Sealed server login state (#13, F-01).** New `OpaqueServer.StartSealedLogin` / `FinishSealedLogin` and `StartSealedServerLoginResult`. The server state is encrypted and authenticated (XChaCha20-Poly1305, key derived from `serverSetup` with HKDF-SHA512) and expires after 120 s, so it can no longer be used to forge the client's finish message or read the session key. It stays stateless: any instance sharing the setup can finish a login. New overload `FinishSealedLogin(…, Func<string, bool> tryConsume, …)` and `LoginStateReplayCache` enforce single use (#14, F-02): the state id is consumed only after the login verifies, and a second use fails. Multi-instance deployments must back `tryConsume` with shared storage.
 - `OpaqueServer.StartLogin` and `FinishLogin(serverLoginState, …)` are `[Obsolete]`: the raw state they produce is a bearer secret. They keep working and will be removed in 2.0. Migration: replace the pair with `StartSealedLogin` / `FinishSealedLogin(serverSetup, …)`; sealed and raw states are not interchangeable, so finish in-flight logins with the API that started them.
 - New native dependencies: `chacha20poly1305` (and its RustCrypto dependencies).
@@ -12,12 +13,10 @@
 - **Packaging (F-11).** Source Link and embedded symbols, deterministic assembly in CI; `opaque-ke` requirement tightened to 3.0.0; tests also run on .NET 10; README documents provenance verification.
 - **CI (F-07).** Zig installed with pinned hashes, no network rustup installer, no restored cache in release builds. cargo-zigbuild now comes from a hash-pinned wheel too (#15).
 - **Advisory RUSTSEC-2026-0387** (`crypto-bigint` timing) is explicitly ignored in `cargo audit`; not fixable until `opaque-ke` supports `elliptic-curve` 0.14. Affects only the optional `p256` feature. See `docs/security.md`.
-
 - **Native handle registries (hardening).** The result-handle registry is keyed by address and type, so a stale pointer whose address was reused by another result type can no longer free it as the wrong type, and a panic while a registry lock is held no longer poisons it (it used to make every later native call return null for the rest of the process).
 - **Docs.** The README install command named the upstream `Vaultic.OPAQUE.Net` package instead of `Cyphra.OPAQUE.Net`; `docs/api.md` and `docs/usage.md` no longer present the obsolete `ServerStaicPublicKey` spelling as current.
 - **Tests.** Added coverage for sealed login with client/server identifiers, `LoginStateReplayCache` under contention, `KSFConfig` bounds, named KSF profiles, identifier parsing and wrong-type handle release.
 - **Package hygiene (#18).** The library now multi-targets `net8.0` and `net10.0` (.NET 8 support ends 2026-11-10); the release workflow installs both SDKs and asserts both `lib/` assemblies are in the package. CI already runs the tests on both. Two `dotnet pack` runs of the same commit with `ContinuousIntegrationBuild` (set automatically in GitHub Actions) yield byte-identical entries, assemblies included; only the zip entry timestamps of the generated nuspec/`.rels` differ, so the `.nupkg` hash itself is not reproducible. Compare the assemblies, or the build provenance attestation (`gh attestation verify`), instead. `opaque-ke` stays on 3.0.0: the only newer release is the pre-release 4.1.0-pre.2.
-- **BREAKING: `RfcDraftRecommended` memory is now exactly 2^21 KiB** (it was 2^21 - 1, which Argon2 rounds down), matching draft-irtf-cfrg-opaque-16. Records created with this profile no longer authenticate and must be re-registered; `MemoryConstrained` and `Custom` are unchanged.
 
 ## 1.5.0
 
