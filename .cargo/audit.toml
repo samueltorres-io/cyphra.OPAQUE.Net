@@ -1,0 +1,9 @@
+[advisories]
+ignore = [
+  # crypto-bigint 0.5.5 timing variability. Comes only via elliptic-curve 0.13, which opaque-ke
+  # 3.x/4.0.x (and voprf 0.5) pin; the fix (>= 0.7.6) needs elliptic-curve 0.14, which no stable
+  # opaque-ke supports yet. The shipped build uses Ristretto255 (curve25519-dalek, no
+  # crypto-bigint arithmetic); only the optional `p256` feature does scalar math through it.
+  # Remove once opaque-ke moves to elliptic-curve 0.14. Reviewed 2026-11-10. See docs/security.md.
+  "RUSTSEC-2026-0387",
+]

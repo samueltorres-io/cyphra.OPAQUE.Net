@@ -18,21 +18,26 @@ The package namespace is `OPAQUE.Net`.
 - `CreateSetup(out serverSetup)` creates the server's long-term setup secret.
 - `GetPublicKey(serverSetup, out publicKey)` derives the corresponding public key.
 - `CreateRegistrationResponse(serverSetup, userIdentifier, registrationRequest, out response)` processes client registration.
-- `StartLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` starts server login and exposes infrastructure failures separately.
-- The extended `StartLogin` overload accepts `clientIdentifier` and `serverIdentifier`.
-- `FinishLogin(serverLoginState, finishLoginRequest, out serverSessionKey)` completes login.
+- `StartSealedLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` starts server login, returns the server state sealed under the setup, and exposes infrastructure failures separately. The extended overload accepts `clientIdentifier` and `serverIdentifier`.
+- `FinishSealedLogin(serverSetup, sealedLoginState, finishLoginRequest, out serverSessionKey)` completes login. It fails for a state that was altered, expired (2 minutes), or sealed under another setup.
+- `StartLogin` / `FinishLogin(serverLoginState, …)` are obsolete: the raw state they use is a bearer secret (see [security](security.md)).
+
+## `LoginStateReplayCache`
+
+`TryConsume(id)` returns true the first time an id is seen and false afterwards, for 5 minutes (longer than a sealed state lives). It is thread-safe and in-memory, so it is correct only for a single server instance and forgets everything on restart; use shared storage with an atomic set-if-absent for several instances or restarts. Pass `TryConsume` as the `tryConsume` argument of `FinishSealedLogin`.
 
 ## Result objects
 
 | Type | Important values |
 | --- | --- |
 | `StartClientRegistrationResult` | `ClientRegistrationState`, `RegistrationRequest` |
-| `FinishClientRegistrationResult` | `RegistrationRecord`, `ExportKey`, `ServerStaicPublicKey` |
+| `FinishClientRegistrationResult` | `RegistrationRecord`, `ExportKey`, `ServerStaticPublicKey` |
 | `StartClientLoginResult` | `ClientLoginState`, `StartLoginRequest` |
-| `StartServerLoginResult` | `ServerLoginState`, `LoginResponse` |
+| `StartSealedServerLoginResult` | `SealedLoginState`, `LoginResponse` |
+| `StartServerLoginResult` (obsolete) | `ServerLoginState`, `LoginResponse` |
 | `FinishClientLoginResult` | `FinishLoginRequest`, `SessionKey`, `ExportKey`, `ServerStaticPublicKey` |
 
-The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
+Send only `LoginResponse` to the client. `SealedLoginState` is valid for two minutes but not single-use by itself: use `FinishSealedLogin(serverSetup, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)` to refuse a second use. `tryConsume` receives a stable id of the state and must atomically record it and return true only the first time (shared storage such as Redis `SET NX` with a TTL of at least 120 s for several instances; `LoginStateReplayCache.TryConsume` for a single instance). It runs only after the state and the finish message verify, so a bad finish does not burn the state. The raw `ServerLoginState` of the obsolete API is a server-side secret (see [security](security.md)). The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
 
 ## `KSFConfig`
 

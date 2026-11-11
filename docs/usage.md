@@ -52,7 +52,7 @@ string exportKey = finish.ExportKey;
 string serverStaticPublicKey = finish.ServerStaticPublicKey;
 ```
 
-Only `registrationRecord` is required by the server for later login. The export key is client-side material and should be handled as a secret. The current API also exposes the server key through the legacy property `ServerStaicPublicKey` on `FinishClientRegistrationResult`; new code should prefer the correctly spelled login result property, while existing callers must account for this compatibility typo.
+Only `registrationRecord` is required by the server for later login. The export key is client-side material and should be handled as a secret. `FinishClientRegistrationResult` also keeps the misspelled `ServerStaicPublicKey` as an `[Obsolete]` alias of `ServerStaticPublicKey`; use the correctly spelled property.
 
 ## Login
 
@@ -63,12 +63,12 @@ if (!client.StartLogin(password,
     out StartClientLoginResult? clientStart) || clientStart is null)
     throw new InvalidOperationException("Client login could not start.");
 
-if (!server.StartLogin(
+if (!server.StartSealedLogin(
     serverSetup,
     clientStart.StartLoginRequest,
     userIdentifier,
     registrationRecord,
-    out StartServerLoginResult? serverStart,
+    out StartSealedServerLoginResult? serverStart,
     out Exception? infrastructureError) || serverStart is null)
 {
     throw new AuthenticationException("Login could not start.", infrastructureError);
@@ -81,9 +81,16 @@ if (!client.FinishLogin(
     out FinishClientLoginResult? clientFinish) || clientFinish is null)
     throw new AuthenticationException("Invalid credentials.");
 
-if (!server.FinishLogin(
-    serverStart.ServerLoginState,
+// Only LoginResponse goes to the client. SealedLoginState is encrypted, tamper-proof and expires
+// after two minutes, so any server-side store works (cache, database), on any instance sharing the setup.
+// Use the tryConsume overload so a state cannot be finished twice: LoginStateReplayCache (create one per
+// process) for a single instance, or shared atomic storage (e.g. Redis SET NX) for several.
+var replayCache = new LoginStateReplayCache();
+if (!server.FinishSealedLogin(
+    serverSetup,
+    serverStart.SealedLoginState,
     clientFinish.FinishLoginRequest,
+    replayCache.TryConsume,
     out string? serverSessionKey) || serverSessionKey is null)
     throw new AuthenticationException("Login could not be completed.");
 
@@ -107,7 +114,7 @@ var custom = KSFConfig.Create(
     parallelism: 4);
 ```
 
-Use the same configuration for registration and login. Custom values are range-checked before the native call. The current limits are 1–10 iterations, 64 MiB–256 MiB memory, and parallelism 1–16. `RfcDraftRecommended` is an explicit compatibility choice and can require about 2 GiB; deploy it only where that per-request memory budget is available. Changing the configuration for existing records can make login fail, so treat it as part of the credential format and migration plan.
+Use the same configuration for registration and login. Custom values are range-checked before the native call. The current limits are 1–10 iterations, 64 MiB–256 MiB memory, and parallelism 1–16. `RfcDraftRecommended` is an explicit compatibility choice and can require about 2 GiB; deploy it only where that per-request memory budget is available. Changing the configuration for existing records can make login fail, so treat it as part of the credential format and migration plan. In particular, `RfcDraftRecommended` now uses exactly 2^21 KiB as in draft-irtf-cfrg-opaque-16 (it used 2^21 - 1 before this release): records registered with the old value no longer authenticate and must be registered again.
 
 ## Failure handling
 

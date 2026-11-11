@@ -1,6 +1,6 @@
 # Documentação do Cyphra OPAQUE.Net
 
-O Cyphra OPAQUE.Net é um wrapper para .NET 8 de uma implementação Rust do protocolo OPAQUE, que permite autenticação por senha sem que o servidor receba a senha em texto puro.
+O Cyphra OPAQUE.Net é um wrapper para .NET (net8.0 e net10.0) de uma implementação Rust do protocolo OPAQUE, que permite autenticação por senha sem que o servidor receba a senha em texto puro.
 
 Este projeto é um fork do [Vaultic-LLC/OPAQUE.Net](https://github.com/Vaultic-LLC/OPAQUE.Net), criado para melhorar a biblioteca, mantê-la ativamente e reforçar sua segurança.
 

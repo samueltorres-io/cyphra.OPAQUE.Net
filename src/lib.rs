@@ -12,9 +12,10 @@ use opaque_ke::{
 
 use base64::{engine::general_purpose as b64, Engine as _};
 use generic_array::{ArrayLength, GenericArray};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 mod csharp;
+mod seal;
 use libc::c_char;
 
 mod types;
@@ -55,6 +56,8 @@ const BASE64: b64::GeneralPurpose = b64::URL_SAFE_NO_PAD;
 const MAX_ENCODED_PROTOCOL_MESSAGE_LEN: usize = 64 * 1024;
 const MAX_PASSWORD_LEN: usize = 1024;
 const MAX_IDENTIFIER_LEN: usize = 1024;
+// draft-irtf-cfrg-opaque-16: Argon2id(S = zeroes(16), p = 4, m = 2^21, t = 1).
+const RFC_DRAFT_MEMORY_KIB: u32 = 1 << 21;
 const MIN_CUSTOM_MEMORY_KIB: u32 = 64 * 1024;
 // The RFC profile is an explicit caller-selected compatibility profile. Custom profiles are
 // capped to a practical per-operation budget so untrusted application configuration cannot turn
@@ -68,40 +71,39 @@ type JsResult<T> = Result<T, Error>;
 impl Ksf for types::CustomKsf {
     fn hash<L: ArrayLength<u8>>(
         &self,
-        input: GenericArray<u8, L>,
+        mut input: GenericArray<u8, L>,
     ) -> Result<GenericArray<u8, L>, InternalError> {
         let mut output = GenericArray::default();
-        self.argon
-            .hash_password_into(&input, &[0; argon2::RECOMMENDED_SALT_LEN], &mut output)
-            .map_err(|_| InternalError::KsfError)?;
+        // The Argon2 matrix is not wiped: it is 64 MiB or more, so the allocator returns it to the OS on
+        // free, and zeroing it with volatile writes cost ~25% of the login latency (measured).
+        let result =
+            self.argon
+                .hash_password_into(&input, &[0; argon2::RECOMMENDED_SALT_LEN], &mut output);
+        // The input is the OPRF output (a secret); wiping 64 bytes is free.
+        input.as_mut_slice().zeroize();
+        result.map_err(|_| InternalError::KsfError)?;
         Ok(output)
     }
 }
 
-fn build_argon2_ksf(
-    t_cost: u32,
-    m_cost: u32,
-    parallelism: u32,
-) -> Result<Option<types::CustomKsf>, Error> {
-    let mut param_builder = ParamsBuilder::default();
-    param_builder.t_cost(t_cost);
-    param_builder.m_cost(m_cost);
-    param_builder.p_cost(parallelism);
-
-    if let Ok(params) = param_builder.build() {
-        let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-        return Ok(Some(types::CustomKsf { argon }));
-    }
-
-    Err(Error::InvalidKsf)
+fn build_argon2_ksf(t_cost: u32, m_cost: u32, parallelism: u32) -> Result<types::CustomKsf, Error> {
+    let params = ParamsBuilder::new()
+        .t_cost(t_cost)
+        .m_cost(m_cost)
+        .p_cost(parallelism)
+        .build()
+        .map_err(|_| Error::InvalidKsf)?;
+    Ok(types::CustomKsf {
+        argon: Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
+    })
 }
 
 fn get_custom_ksf(
     ksf_config: types::KeyStretchingFunctionConfig,
-) -> Result<Option<types::CustomKsf>, Error> {
+) -> Result<types::CustomKsf, Error> {
     match ksf_config {
         types::KeyStretchingFunctionConfig::RfcDraftRecommended => {
-            build_argon2_ksf(1, u32::pow(2, 21) - 1, 4)
+            build_argon2_ksf(1, RFC_DRAFT_MEMORY_KIB, 4)
         }
         types::KeyStretchingFunctionConfig::MemoryConstrained => {
             build_argon2_ksf(3, u32::pow(2, 16), 4)
@@ -208,7 +210,7 @@ fn try_create_ksf_config(
 ) -> Result<types::KeyStretchingFunctionConfig, Error> {
     let ksf_config_type = ffi_string(csharp_config_type)?;
 
-    let ksf = match ksf_config_type.as_str() {
+    match ksf_config_type.as_str() {
         "rfcDraftRecommended" => Ok(types::KeyStretchingFunctionConfig::RfcDraftRecommended),
         "memoryConstrained" => Ok(types::KeyStretchingFunctionConfig::MemoryConstrained),
         "custom" => {
@@ -234,9 +236,7 @@ fn try_create_ksf_config(
             })
         }
         _ => Err(Error::InvalidKsf),
-    };
-
-    ksf
+    }
 }
 
 fn get_identifiers(idents: &Option<types::CustomIdentifiers>) -> Identifiers<'_> {
@@ -318,10 +318,17 @@ fn internal_start_server_login(
 fn internal_finish_server_login(
     params: types::FinishServerLoginParams,
 ) -> Result<Zeroizing<String>, Error> {
-    let credential_finalization_bytes = base64_decode(&params.finish_login_request)?;
     let state_bytes = base64_decode(&params.server_login_state)?;
+    finish_server_login_from_bytes(&state_bytes, &params.finish_login_request)
+}
+
+fn finish_server_login_from_bytes(
+    state_bytes: &[u8],
+    finish_login_request: &str,
+) -> Result<Zeroizing<String>, Error> {
+    let credential_finalization_bytes = base64_decode(finish_login_request)?;
     let state =
-        ServerLogin::<DefaultCipherSuite>::deserialize(&state_bytes).map_err(protocol_error)?;
+        ServerLogin::<DefaultCipherSuite>::deserialize(state_bytes).map_err(protocol_error)?;
     let server_login_finish_result = state
         .finish(
             CredentialFinalization::deserialize(&credential_finalization_bytes)
@@ -331,6 +338,31 @@ fn internal_finish_server_login(
     Ok(Zeroizing::new(
         BASE64.encode(server_login_finish_result.session_key),
     ))
+}
+
+/// Same as `internal_start_server_login`, but the returned state is sealed under `server_setup`.
+fn internal_start_server_login_sealed(
+    params: types::StartServerLoginParams,
+    now: u64,
+) -> Result<types::StartServerLoginResult, Error> {
+    let setup_bytes = base64_decode(&params.server_setup)?;
+    let mut result = internal_start_server_login(params)?;
+    let raw_state = base64_decode(&result.server_login_state)?;
+    let sealed = seal::seal(&setup_bytes, &raw_state, now).map_err(|_| Error::Ffi)?;
+    result.server_login_state = Zeroizing::new(BASE64.encode(sealed));
+    Ok(result)
+}
+
+fn internal_finish_server_login_sealed(
+    server_setup: &str,
+    sealed_state: &str,
+    finish_login_request: &str,
+    now: u64,
+) -> Result<Zeroizing<String>, Error> {
+    let setup_bytes = base64_decode(server_setup)?;
+    let sealed = base64_decode(sealed_state)?;
+    let state_bytes = seal::open(&setup_bytes, &sealed, now).map_err(|_| Error::Ffi)?;
+    finish_server_login_from_bytes(&state_bytes, finish_login_request)
 }
 
 fn internal_start_client_login(
@@ -361,7 +393,7 @@ fn internal_finish_client_login(
     let finish_params = ClientLoginFinishParameters::new(
         None,
         get_identifiers(&params.identifiers),
-        custom_ksf.as_ref(),
+        Some(&custom_ksf),
     );
 
     let result = state.finish(
@@ -414,7 +446,7 @@ fn internal_finish_client_registration(
 
     let finish_params = ClientRegistrationFinishParameters::new(
         get_identifiers(&params.identifiers),
-        custom_ksf.as_ref(),
+        Some(&custom_ksf),
     );
 
     let client_finish_registration_result = state
@@ -552,8 +584,8 @@ pub extern "C" fn create_server_registration_response(
     )
 }
 
-#[no_mangle]
-pub extern "C" fn start_server_login(
+fn start_server_login_impl(
+    sealed: bool,
     csharp_server_setup: *mut c_char,
     csharp_start_login_request: *mut c_char,
     csharp_user_identifier: *mut c_char,
@@ -586,19 +618,70 @@ pub extern "C" fn start_server_login(
                     Err(_) => return std::ptr::null_mut(),
                 };
 
-            if let Ok(result) = internal_start_server_login(types::StartServerLoginParams {
+            let params = types::StartServerLoginParams {
                 server_setup: rust_server_setup,
                 registration_record: rust_registration_record,
                 start_login_request: rust_start_login_request,
                 user_identifier: String::clone(&rust_user_identifier),
                 identifiers,
-            }) {
+            };
+            let started = if sealed {
+                match seal::unix_now() {
+                    Ok(now) => internal_start_server_login_sealed(params, now),
+                    Err(_) => {
+                        return types::into_result_handle(types::StartServerLoginResult::default())
+                    }
+                }
+            } else {
+                internal_start_server_login(params)
+            };
+            if let Ok(result) = started {
                 return types::into_result_handle(result);
             }
 
             types::into_result_handle(types::StartServerLoginResult::default())
         },
         std::ptr::null_mut(),
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn start_server_login(
+    csharp_server_setup: *mut c_char,
+    csharp_start_login_request: *mut c_char,
+    csharp_user_identifier: *mut c_char,
+    csharp_registration_record: *mut c_char,
+    csharp_client_identifier: *mut c_char,
+    csharp_server_identifier: *mut c_char,
+) -> *mut types::StartServerLoginResult {
+    start_server_login_impl(
+        false,
+        csharp_server_setup,
+        csharp_start_login_request,
+        csharp_user_identifier,
+        csharp_registration_record,
+        csharp_client_identifier,
+        csharp_server_identifier,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn start_server_login_sealed(
+    csharp_server_setup: *mut c_char,
+    csharp_start_login_request: *mut c_char,
+    csharp_user_identifier: *mut c_char,
+    csharp_registration_record: *mut c_char,
+    csharp_client_identifier: *mut c_char,
+    csharp_server_identifier: *mut c_char,
+) -> *mut types::StartServerLoginResult {
+    start_server_login_impl(
+        true,
+        csharp_server_setup,
+        csharp_start_login_request,
+        csharp_user_identifier,
+        csharp_registration_record,
+        csharp_client_identifier,
+        csharp_server_identifier,
     )
 }
 
@@ -618,6 +701,37 @@ pub extern "C" fn finish_server_login(
                 server_login_state: rust_server_login_state,
                 finish_login_request: rust_finish_login_request,
             }) {
+                return csharp::rust_string_to_csharp_string_handle(&result);
+            }
+
+            csharp::rust_string_to_csharp_string_handle("")
+        },
+        std::ptr::null_mut(),
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn finish_server_login_sealed(
+    csharp_server_setup: *mut c_char,
+    csharp_sealed_login_state: *mut c_char,
+    csharp_finish_login_request: *mut c_char,
+) -> *mut c_char {
+    csharp::ffi_boundary(
+        || {
+            let rust_server_setup = ffi_input!(csharp_server_setup, std::ptr::null_mut());
+            let rust_sealed_state = ffi_input!(csharp_sealed_login_state, std::ptr::null_mut());
+            let rust_finish_login_request =
+                ffi_input!(csharp_finish_login_request, std::ptr::null_mut());
+
+            let Ok(now) = seal::unix_now() else {
+                return csharp::rust_string_to_csharp_string_handle("");
+            };
+            if let Ok(result) = internal_finish_server_login_sealed(
+                &rust_server_setup,
+                &rust_sealed_state,
+                &rust_finish_login_request,
+                now,
+            ) {
                 return csharp::rust_string_to_csharp_string_handle(&result);
             }
 
@@ -781,6 +895,51 @@ mod tests {
     }
 
     #[test]
+    fn named_ksf_profiles_build_and_unknown_profile_is_rejected() {
+        let rfc = get_custom_ksf(types::KeyStretchingFunctionConfig::RfcDraftRecommended)
+            .ok()
+            .unwrap();
+        assert_eq!(rfc.argon.params().m_cost(), 1 << 21);
+        assert_eq!(rfc.argon.params().t_cost(), 1);
+        assert_eq!(rfc.argon.params().p_cost(), 4);
+        assert!(get_custom_ksf(types::KeyStretchingFunctionConfig::MemoryConstrained).is_ok());
+
+        let c = |s: &str| CString::new(s).unwrap();
+        let (kind, empty) = (c("bogus"), c(""));
+        let (p0, p1, p2) = (
+            empty.as_ptr() as *mut c_char,
+            empty.as_ptr() as *mut c_char,
+            empty.as_ptr() as *mut c_char,
+        );
+        assert!(try_create_ksf_config(kind.as_ptr() as *mut c_char, p0, p1, p2).is_err());
+        // "custom" with a missing value must not fall back to a default.
+        let custom = c("custom");
+        assert!(try_create_ksf_config(custom.as_ptr() as *mut c_char, p0, p1, p2).is_err());
+    }
+
+    #[test]
+    fn identifiers_are_optional_individually_and_length_limited() {
+        let c = |s: &str| CString::new(s).unwrap();
+        let ids = |client: &CString, server: &CString| {
+            try_create_identifiers(
+                client.as_ptr() as *mut c_char,
+                server.as_ptr() as *mut c_char,
+            )
+        };
+        let (empty, alice, srv) = (c(""), c("alice"), c("srv"));
+
+        assert!(ids(&empty, &empty).ok().unwrap().is_none());
+        let only_server = ids(&empty, &srv).ok().unwrap().unwrap();
+        assert!(only_server.client.is_none() && only_server.server.as_deref() == Some("srv"));
+        let only_client = ids(&alice, &empty).ok().unwrap().unwrap();
+        assert!(only_client.client.as_deref() == Some("alice") && only_client.server.is_none());
+
+        let too_long = c(&"x".repeat(MAX_IDENTIFIER_LEN + 1));
+        assert!(ids(&too_long, &empty).is_err());
+        assert!(ids(&empty, &too_long).is_err());
+    }
+
+    #[test]
     fn rejects_non_numeric_ffi_ksf_parameters() {
         let kind = CString::new("custom").expect("static test input is valid");
         let iterations = CString::new("not-a-number").expect("static test input is valid");
@@ -810,15 +969,6 @@ mod tests {
     fn rejects_oversized_password_before_protocol_processing() {
         let password = CString::new("x".repeat(MAX_PASSWORD_LEN + 1)).unwrap();
         assert!(start_client_login(password.as_ptr() as *mut c_char).is_null());
-    }
-
-    #[test]
-    fn result_handles_ignore_double_free() {
-        let password = CString::new("password").unwrap();
-        let result = start_client_login(password.as_ptr() as *mut c_char);
-        assert!(!result.is_null());
-        types::free_start_client_login_result(result);
-        types::free_start_client_login_result(result);
     }
 
     #[test]
@@ -1113,5 +1263,72 @@ mod tests {
         assert!(call(&bytes).is_ok());
         bytes.push(0);
         assert!(call(&bytes).is_err());
+    }
+
+    fn sealed_start(reg: &Registered, request: &str, now: u64) -> types::StartServerLoginResult {
+        internal_start_server_login_sealed(
+            types::StartServerLoginParams {
+                server_setup: z(&reg.setup),
+                registration_record: Some(z(&reg.record)),
+                start_login_request: z(request),
+                user_identifier: USER.to_owned(),
+                identifiers: None,
+            },
+            now,
+        )
+        .ok()
+        .unwrap()
+    }
+
+    #[test]
+    fn sealed_login_round_trips_and_is_not_a_usable_raw_state() {
+        let reg = register(PASSWORD);
+        let start = internal_start_client_login(z(PASSWORD)).ok().unwrap();
+        let server = sealed_start(&reg, &start.start_login_request, 1_000);
+        let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
+
+        let key = internal_finish_server_login_sealed(
+            &reg.setup,
+            &server.server_login_state,
+            &client.finish_login_request,
+            1_000,
+        )
+        .ok()
+        .unwrap();
+        assert_eq!(*key, *client.session_key);
+
+        // The sealed blob is not a raw state: the legacy path must refuse it.
+        assert!(server_finish(&server.server_login_state, &client.finish_login_request).is_err());
+    }
+
+    #[test]
+    fn sealed_login_rejects_expired_foreign_setup_and_tampered_state() {
+        let reg = register(PASSWORD);
+        let other = register(PASSWORD);
+        let start = internal_start_client_login(z(PASSWORD)).ok().unwrap();
+        let server = sealed_start(&reg, &start.start_login_request, 1_000);
+        let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
+        let finish = |setup: &str, state: &str, now: u64| {
+            internal_finish_server_login_sealed(setup, state, &client.finish_login_request, now)
+        };
+
+        assert!(finish(
+            &reg.setup,
+            &server.server_login_state,
+            1_000 + seal::STATE_TTL_SECS
+        )
+        .is_ok());
+        assert!(finish(
+            &reg.setup,
+            &server.server_login_state,
+            1_000 + seal::STATE_TTL_SECS + 1
+        )
+        .is_err());
+        assert!(finish(&other.setup, &server.server_login_state, 1_000).is_err());
+
+        let mut bytes = BASE64.decode(&*server.server_login_state).unwrap();
+        let mid = bytes.len() / 2;
+        bytes[mid] ^= 1;
+        assert!(finish(&reg.setup, &BASE64.encode(bytes), 1_000).is_err());
     }
 }

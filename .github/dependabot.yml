@@ -1,0 +1,19 @@
+# Keeps the SHA-pinned GitHub Actions, the Rust dependencies and the NuGet packages current. Updates arrive
+# as pull requests into develop, so they go through the same Build and test gate as any other change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+  - package-ecosystem: nuget
+    directory: /.Net
+    target-branch: develop
+    schedule:
+      interval: weekly

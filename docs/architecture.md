@@ -3,18 +3,18 @@
 Cyphra OPAQUE.Net has three layers:
 
 1. **.NET API** — `OpaqueClient`, `OpaqueServer`, result types, validation, and safe-handle ownership in `.Net/OPAQUE.Net`.
-2. **C ABI bridge** — exported Rust functions in `src/csharp.rs` convert protocol inputs and outputs across the native boundary.
+2. **C ABI bridge** — the exported Rust functions (`src/lib.rs`, `src/types.rs`) and the string and handle helpers in `src/csharp.rs` convert protocol inputs and outputs across the native boundary. Every export runs inside a panic boundary.
 3. **OPAQUE implementation** — Rust code in `src/`, backed by `opaque-ke`, Argon2, randomness, and serialization dependencies.
 
 ## Native boundary
 
-The C# wrapper calls the native library with `DllImport("opaque", CallingConvention = CallingConvention.Cdecl)`. Native strings are returned through `SafeHandle`-based wrappers and released by the matching Rust functions. Input strings must be valid UTF-8, NUL-terminated values no larger than 64 KiB; passwords and identifiers have a 1 KiB (UTF-8 bytes) limit and the C# wrapper rejects embedded NUL and unpaired surrogates. `null`, invalid UTF-8, oversized values, and null result handles fail the operation instead of being interpreted as empty strings. Any change to an exported function, string encoding, ownership rule, or result layout must update both sides and include tests.
+The C# wrapper calls the native library with `DllImport("opaque", CallingConvention = CallingConvention.Cdecl)`. Native strings and result objects are returned through `SafeHandle`-based wrappers and released by the matching Rust functions. The native side keeps a registry of the handles it has issued (by address and type), so a repeated or wrong-type release is ignored instead of freeing memory twice, and strings are wiped before they are freed. The library itself is loaded by `NativeLibraryResolver`, only from the directories the .NET host resolved for the application (see [security](security.md#design-notes-and-known-limits)). Input strings must be valid UTF-8, NUL-terminated values no larger than 64 KiB; passwords and identifiers have a 1 KiB (UTF-8 bytes) limit and the C# wrapper rejects embedded NUL and unpaired surrogates. `null`, invalid UTF-8, oversized values, and null result handles fail the operation instead of being interpreted as empty strings. Any change to an exported function, string encoding, ownership rule, or result layout must update both sides and include tests.
 
-The package stores platform-specific binaries under `runtimes/<rid>/native/`. The .NET project selects the binary matching the host runtime identifier and maps repository-specific filenames back to the name expected by P/Invoke.
+The package stores platform-specific binaries under `runtimes/<rid>/native/`. The .NET project selects the binary matching the host runtime identifier and maps repository-specific filenames back to the name expected by P/Invoke. The managed assembly targets `net8.0` and `net10.0`.
 
 ## State and secrets
 
-Protocol state is deliberately carried between individual client and server calls. The library does not provide a database, session store, transport, account service, or secret manager. The application owns:
+Protocol state is deliberately carried between individual client and server calls. Server login state is sealed (authenticated encryption keyed from `serverSetup`, see `src/seal.rs`), which keeps the server stateless; the legacy raw `ServerLoginState` is a bearer secret and must never leave the server. The library does not provide a database, session store, transport, account service, or secret manager. The application owns:
 
 - protecting `serverSetup`;
 - associating `RegistrationRecord` with the correct account;

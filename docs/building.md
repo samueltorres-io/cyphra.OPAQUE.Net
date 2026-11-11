@@ -1,6 +1,6 @@
 # Building and testing
 
-The package targets .NET 8 and ships the Rust native library for six runtime identifiers:
+The package targets .NET 8 and .NET 10 (`net8.0` and `net10.0`) and ships the Rust native library for six runtime identifiers:
 
 | RID | Rust target | Repository asset |
 | --- | --- | --- |
@@ -13,9 +13,17 @@ The package targets .NET 8 and ships the Rust native library for six runtime ide
 
 The Linux binaries are built with a glibc 2.17 compatibility floor. The `Build and test` workflow builds the Rust library, runs Rust tests, checks the architecture and glibc floor, and runs the .NET test suite. It is the CI gate for pull requests into `main`.
 
+## Unsupported runtime identifiers
+
+Only the six RIDs above have a native library. Linux support is **glibc only**: `linux-musl-x64`/`linux-musl-arm64` (Alpine), `win-x86`, `linux-arm`, `linux-x86`, Android, iOS, tvOS, browser and WASI have none, and the glibc `libopaque.so` cannot load on musl.
+
+- **Build time.** Restoring or publishing for one of them (`-r <rid>`) emits warning `OPAQUE001` naming the RID. To make it fail the build, add `<WarningsAsErrors>$(WarningsAsErrors);OPAQUE001</WarningsAsErrors>` to your project.
+- **Run time.** The app starts, but the first call throws `DllNotFoundException` (with the probed directories) or `BadImageFormatException`. These are never mapped to a failed login; see [security notes](security.md#design-notes-and-known-limits).
+- **Alpine.** Use a glibc base image (for example the Debian-based `mcr.microsoft.com/dotnet/runtime`/`aspnet` images). A musl binary is not shipped; adding one means a new target, matrix entry and package validation (see *Adding a platform*).
+
 ## Prerequisites
 
-- .NET SDK 8 or later;
+- .NET SDK 10 (builds both target frameworks; the library and the test project target `net8.0` and `net10.0`) and SDK 8 or its runtime to run the `net8.0` tests;
 - `rustup` and the toolchain pinned in `rust-toolchain.toml`;
 - the Rust target for the platform being built;
 - `cargo-zigbuild` and Zig for Linux cross-compilation.
@@ -43,10 +51,10 @@ file .Net/OPAQUE.Net/libopaque.so
 
 ## Linux compatibility build
 
-Install `cargo-zigbuild`, add the Rust targets, and use the `.2.17` suffix:
+Install Zig and `cargo-zigbuild` from the hash-pinned wheels CI uses (not `cargo install`, which cannot be checksum-pinned), add the Rust targets, and use the `.2.17` suffix:
 
 ```sh
-cargo install cargo-zigbuild
+python3 -m pip install --user --require-hashes -r .github/requirements-zig.txt
 rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 cargo zigbuild --release --locked --target x86_64-unknown-linux-gnu.2.17
 cargo zigbuild --release --locked --target aarch64-unknown-linux-gnu.2.17
@@ -64,7 +72,7 @@ Releases are packed only by `publish.yaml`, from natives built by CI for that ex
 dotnet pack .Net/OPAQUE.Net/OPAQUE.Net.csproj --configuration Release --output ./artifacts
 ```
 
-The project fails packing when a required native asset is missing. Inspect the package and confirm all six runtime assets are present before publishing. The `publish` workflow performs the same package verification and publishes only after a release or manual dispatch.
+The project fails packing when a required native asset is missing. Inspect the package and confirm all six runtime assets are present before publishing. The `publish` workflow performs the same package verification (including both `lib/net8.0` and `lib/net10.0`) and runs only when a GitHub release is published; the release tag `vX.Y.Z` sets the package version.
 
 ## Adding a platform
 

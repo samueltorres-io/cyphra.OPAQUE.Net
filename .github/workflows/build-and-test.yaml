@@ -6,6 +6,7 @@
 # run inside the same workflow run, so the artifacts uploaded here are downloadable by the caller.
 #
 # Deliberately uses only first-party actions/* (pinned by commit SHA) plus rustup, preinstalled on GitHub runners.
+# Release builds (called from publish.yaml) restore no cache, so nothing cached can end up in the package.
 
 name: Build and test
 
@@ -27,6 +28,23 @@ permissions:
   contents: read
 
 jobs:
+  # Separate job on purpose: `cargo install` cannot be checksum-pinned and runs build scripts, so it
+  # must not share a runner with the jobs whose output is packed. Still gates releases, because
+  # publish.yaml needs this whole workflow to pass. Fails on known-vulnerable dependencies; warnings
+  # such as unsound/unmaintained advisories do not fail it. Ignores live in .cargo/audit.toml.
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Audit Cargo.lock
+        run: |
+          cargo +stable install --locked cargo-audit --version 0.22.2
+          cargo audit
+
   build_and_test:
     name: Build and test (${{ matrix.rid }})
     runs-on: ${{ matrix.os }}
@@ -92,15 +110,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # Rust ships in the standard runner images, but the ARM64 images are newer and their contents
-      # are less settled, so install rustup if it is absent rather than assume it.
-      - name: Ensure rustup is available
-        run: |
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain none
-            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          fi
+      # rustup ships in every GitHub-hosted image used here (including windows-11-arm). Fail loudly
+      # instead of fetching and executing an installer from the network.
+      - name: Require rustup
+        run: command -v rustup || { echo "::error::rustup is not installed on this runner"; exit 1; }
 
       # rust-toolchain.toml pins the version; `rustup show` installs it if it is not present.
       - name: Install pinned Rust toolchain
@@ -117,38 +130,29 @@ jobs:
           cargo clippy --all-targets --all-features --locked -- -D warnings
           cargo test --all-features --locked
 
-      # Fails on known-vulnerable dependencies (e.g. curve25519-dalek < 4.1.3, RUSTSEC-2024-0344).
-      # Warnings such as unsound/unmaintained advisories do not fail the step.
-      - name: Audit dependencies
-        if: matrix.rid == 'linux-x64'
-        run: |
-          cargo install --locked cargo-audit --version 0.22.2
-          cargo audit
-
       - name: Cache cargo registry and build directory
+        if: github.event_name != 'release'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            ~/.cargo/bin
             target/${{ matrix.target }}
           key: cargo-${{ matrix.rid }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
             cargo-${{ matrix.rid }}-
 
       # Zig acts as the cross-linker and carries its own glibc stubs, which is what makes an
-      # explicit glibc floor possible. Installed from PyPI because that is far quicker than a
-      # source build of Zig itself.
+      # explicit glibc floor possible. Both zig and cargo-zigbuild come from hash-pinned PyPI
+      # wheels (no `cargo install`, which cannot be checksum-pinned and runs build scripts).
       - name: Install cargo-zigbuild
         if: matrix.zig_target != ''
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet --user 'ziglang==0.13.0'
-          if ! command -v cargo-zigbuild >/dev/null 2>&1; then
-            cargo install --locked cargo-zigbuild --version 0.20.1
-          fi
+          python3 -m pip install --quiet --user --require-hashes -r .github/requirements-zig.txt
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           # Not `cargo zigbuild --version`: that routes --version into the zigbuild subcommand,
           # which rejects it. Check the thing most likely to actually be broken instead — that zig
           # itself is reachable — plus that the binary landed on PATH.
@@ -234,10 +238,12 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       # Both projects are AnyCPU, so a solution build and a bare project build resolve the same
-      # output directory (bin/<config>/net8.0) and --no-build is safe either way. Going through the
+      # output directory per target framework (bin/<config>/net8.0, net10.0 for the tests) and --no-build is safe either way. Going through the
       # solution just exercises both projects in one command.
       #
       # Do not reintroduce a <Platforms>/Platform pin here or in the csproj files: it stamps the

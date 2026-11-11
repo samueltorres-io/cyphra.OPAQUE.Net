@@ -1,12 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- .NET 8 leaves support on 2026-11-10; net10.0 is the current LTS. Both ship in lib/. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EnablePackageValidation>true</EnablePackageValidation>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Source Link ships with the SDK; embedded symbols keep the package a single .nupkg. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>embedded</DebugType>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     <PackageTags>Opaque, library</PackageTags>
     <PackageId>Cyphra.OPAQUE.Net</PackageId>
     <Title>Cyphra OPAQUE.Net</Title>
@@ -23,7 +29,7 @@
       on an arm64 machine at all.
     -->
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
   </PropertyGroup>
 
   <!--
@@ -36,6 +42,11 @@
     <OpaqueHostRid Condition="'$(OpaqueHostRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</OpaqueHostRid>
     <OpaqueHostRid Condition="'$(OpaqueHostRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</OpaqueHostRid>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Test" />
+    <None Include="build\Cyphra.OPAQUE.Net.targets" Pack="true" PackagePath="build;buildTransitive" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\LICENSE">

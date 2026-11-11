@@ -3,15 +3,22 @@ use std::collections::HashSet;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 use zeroize::{Zeroize, Zeroizing};
 
 pub const MAX_FFI_STRING_LEN: usize = 64 * 1024;
 
 static LIVE_STRING_HANDLES: OnceLock<Mutex<HashSet<usize>>> = OnceLock::new();
 
-fn live_string_handles() -> &'static Mutex<HashSet<usize>> {
-    LIVE_STRING_HANDLES.get_or_init(|| Mutex::new(HashSet::new()))
+/// Locks a handle registry, recovering from poisoning. A panic while the guard is held cannot leave
+/// a `HashSet` of addresses in a state that matters, whereas treating poison as fatal would make
+/// every later call fail for the rest of the process.
+pub(crate) fn lock_registry<T>(registry: &Mutex<T>) -> MutexGuard<'_, T> {
+    registry.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn live_string_handles() -> MutexGuard<'static, HashSet<usize>> {
+    lock_registry(LIVE_STRING_HANDLES.get_or_init(Default::default))
 }
 
 #[derive(Debug)]
@@ -26,13 +33,8 @@ pub fn rust_string_to_csharp_string_handle(s: &str) -> *mut c_char {
         return std::ptr::null_mut();
     };
     let ptr = CString::into_raw(value);
-    if let Ok(mut handles) = live_string_handles().lock() {
-        handles.insert(ptr as usize);
-        ptr
-    } else {
-        ffi_boundary(|| unsafe { drop(CString::from_raw(ptr)) }, ());
-        std::ptr::null_mut()
-    }
+    live_string_handles().insert(ptr as usize);
+    ptr
 }
 
 pub fn csharp_string_to_rust_string(s: *const c_char) -> Result<Zeroizing<String>, FfiStringError> {
@@ -66,11 +68,7 @@ pub extern "C" fn free_string(s: *mut c_char) {
         return;
     }
 
-    let owned = live_string_handles()
-        .lock()
-        .map(|mut handles| handles.remove(&(s as usize)))
-        .unwrap_or(false);
-    if owned {
+    if live_string_handles().remove(&(s as usize)) {
         ffi_boundary(
             || {
                 // Strings handed to C# may carry session keys or export keys: wipe before freeing.
@@ -79,5 +77,24 @@ pub extern "C" fn free_string(s: *mut c_char) {
             },
             (),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registry_lock_survives_a_poisoning_panic() {
+        let registry = Mutex::new(HashSet::from([1usize]));
+        let _ = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = registry.lock().unwrap();
+            panic!("poison the registry");
+        }));
+        assert!(registry.is_poisoned());
+
+        let mut guard = lock_registry(&registry);
+        guard.insert(2);
+        assert!(guard.contains(&1) && guard.contains(&2));
     }
 }

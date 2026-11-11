@@ -1,6 +1,6 @@
 # Cyphra OPAQUE.Net documentation
 
-Cyphra OPAQUE.Net is a .NET 8 wrapper around a Rust implementation of the OPAQUE password-authenticated key-exchange protocol.
+Cyphra OPAQUE.Net is a .NET wrapper (net8.0 and net10.0) around a Rust implementation of the OPAQUE password-authenticated key-exchange protocol.
 
 This documentation describes the current fork, its API, native boundary, supported platforms, and contribution practices. The project was forked from [Vaultic-LLC/OPAQUE.Net](https://github.com/Vaultic-LLC/OPAQUE.Net) to receive ongoing maintenance and security improvements.
 

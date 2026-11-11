@@ -35,10 +35,13 @@ jobs:
       shell: bash
       run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_SHA is not on main"; exit 1; }
 
+    # The library multi-targets net8.0 and net10.0, so packing needs the SDK that can build both.
     - name: Setup .NET
       uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: |
+          8.0.x
+          10.0.x
 
     # Release packaging must use the native libraries built from this exact revision, never
     # binaries left over in the checkout. The reusable build workflow compiles and tests every RID.
@@ -82,7 +85,10 @@ jobs:
           'runtimes/win-arm64/native/opaque.dll'
           'runtimes/osx-x64/native/libopaque.dylib'
           'runtimes/osx-arm64/native/libopaque.dylib'
+          'build/Cyphra.OPAQUE.Net.targets'
+          'buildTransitive/Cyphra.OPAQUE.Net.targets'
           'lib/net8.0/OPAQUE.Net.dll'
+          'lib/net10.0/OPAQUE.Net.dll'
         )
         $package = Get-ChildItem "${{ env.NuGetDirectory }}" -Filter *.nupkg | Select-Object -First 1
         if (-not $package) { throw "dotnet pack produced no .nupkg" }

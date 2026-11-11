@@ -1,3 +1,5 @@
+﻿// The legacy raw-state API is obsolete on purpose; these tests still cover it (and its replacement).
+#pragma warning disable CS0618
 using OPAQUE.Net;
 using OPAQUE.Net.Helpers;
 using OPAQUE.Net.Types.Exceptions;
@@ -538,6 +540,268 @@ namespace Test
             Assert.IsTrue(new OpaqueClient().StartRegistration(Password, out StartClientRegistrationResult? start));
             Assert.IsTrue(server.CreateRegistrationResponse(setup!, User, start!.RegistrationRequest, out _));
             Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, start.RegistrationRequest + "AAAA", out _));
+        }
+  
+        [TestMethod]
+        public void ServerLoginStateIsNotRevealedByToString()
+        {
+            var result = new StartServerLoginResult("SECRET-STATE", "response");
+            StringAssert.DoesNotMatch(result.ToString()!, new System.Text.RegularExpressions.Regex("SECRET-STATE"));
+        }
+  
+        private static void SealedLogin(string setup, string record, out StartSealedServerLoginResult server, out FinishClientLoginResult client)
+        {
+            var c = new OpaqueClient();
+            var s = new OpaqueServer();
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartSealedLogin(setup, start!.StartLoginRequest, User, record, out StartSealedServerLoginResult? serverResult, out _));
+            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, serverResult!.LoginResponse, Password, out FinishClientLoginResult? clientResult));
+            server = serverResult;
+            client = clientResult!;
+        }
+
+        private static byte[] FromBase64Url(string s)
+        {
+            s = s.Replace('-', '+').Replace('_', '/');
+            return Convert.FromBase64String(s.PadRight(s.Length + (4 - s.Length % 4) % 4, '='));
+        }
+
+        [TestMethod]
+        public void SealedLoginAgreesOnSessionKeyAndHidesIt()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsTrue(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, out string? key));
+            Assert.AreEqual(client.SessionKey, key);
+
+            byte[] blob = FromBase64Url(server.SealedLoginState);
+            byte[] sessionKey = FromBase64Url(client.SessionKey);
+            Assert.IsFalse(blob.AsSpan().IndexOf(sessionKey.AsSpan(0, 16)) >= 0, "session key must not appear in the sealed state");
+        }
+
+        [TestMethod]
+        public void SealedStateRejectsTamperingForeignSetupAndLegacyMixing()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+
+            Assert.IsFalse(s.FinishSealedLogin(setup, Flip(server.SealedLoginState), client.FinishLoginRequest, out _));
+            Assert.IsTrue(s.CreateSetup(out string? otherSetup));
+            Assert.IsFalse(s.FinishSealedLogin(otherSetup!, server.SealedLoginState, client.FinishLoginRequest, out _));
+            // A sealed state is not a raw state, and a raw state is not accepted as sealed.
+            Assert.IsFalse(s.FinishLogin(server.SealedLoginState, client.FinishLoginRequest, out _));
+            Assert.IsTrue(new OpaqueClient().StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? legacy, out _));
+            Assert.IsFalse(s.FinishSealedLogin(setup, legacy!.ServerLoginState, client.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void SealedStateCanBeConsumedOnlyOnce()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+            var cache = new LoginStateReplayCache();
+
+            Assert.IsTrue(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? key));
+            Assert.IsNotNull(key);
+            Assert.IsFalse(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? replayKey));
+            Assert.IsNull(replayKey);
+        }
+
+        [TestMethod]
+        public void ReencodedSealedStateIsNotAReplayBypass()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState + "=", client.FinishLoginRequest, _ => true, out _));
+        }
+
+        [TestMethod]
+        public void ThrowingConsumerNeverReleasesTheKey()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            string? key = "x";
+
+            Assert.ThrowsException<InvalidOperationException>(() =>
+                new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, _ => throw new InvalidOperationException(), out key));
+            Assert.IsNull(key);
+        }
+
+        [TestMethod]
+        public void BadFinishDoesNotBurnTheState()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+            var cache = new LoginStateReplayCache();
+
+            Assert.IsFalse(s.FinishSealedLogin(setup, server.SealedLoginState, Flip(client.FinishLoginRequest), cache.TryConsume, out _));
+            Assert.IsTrue(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out _));
+        }
+
+        [TestMethod]
+        public void SealedStateFromAnotherSessionIsRejected()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult serverA, out _);
+            SealedLogin(setup, record, out _, out FinishClientLoginResult clientB);
+
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, serverA.SealedLoginState, clientB.FinishLoginRequest, out _));
+        }
+
+        [TestMethod]
+        public void SealedLoginValidatesArguments()
+        {
+            var s = new OpaqueServer();
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("", "a", "a", out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "", "a", out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "a", "", out _));
+            Assert.ThrowsException<ArgumentException>(() => s.StartSealedLogin("a", "a", "u\0x", null, out _, out _));
+            Assert.IsFalse(s.FinishSealedLogin("a", "a", "a", out _));
+        }
+
+        [TestMethod]
+        public void SealedLoginBindsClientAndServerIdentifiers()
+        {
+            const string clientId = "client-1", serverId = "server-1";
+            SetupAndRegister(User, Password, clientId, serverId, null, out string setup, out string record, out _, out _);
+            var c = new OpaqueClient();
+            var s = new OpaqueServer();
+
+            // Matching identifiers: both sides agree.
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartSealedLogin(setup, start!.StartLoginRequest, User, record, clientId, serverId, out StartSealedServerLoginResult? ok, out _));
+            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, ok!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? finished));
+            Assert.IsTrue(s.FinishSealedLogin(setup, ok.SealedLoginState, finished!.FinishLoginRequest, out string? key));
+            Assert.AreEqual(finished.SessionKey, key);
+
+            // The server answering under another identity must not yield keys on the client.
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start2));
+            Assert.IsTrue(s.StartSealedLogin(setup, start2!.StartLoginRequest, User, record, clientId, "server-2", out StartSealedServerLoginResult? bad, out _));
+            Assert.IsFalse(c.FinishLogin(start2.ClientLoginState, bad!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? none));
+            Assert.IsNull(none);
+        }
+
+        [TestMethod]
+        public void ReplayCacheAdmitsEachIdOnceEvenUnderContention()
+        {
+            var cache = new LoginStateReplayCache();
+            Assert.ThrowsException<ArgumentException>(() => cache.TryConsume(""));
+            Assert.ThrowsException<ArgumentNullException>(() => cache.TryConsume(null!));
+
+            Assert.IsTrue(cache.TryConsume("a"));
+            Assert.IsTrue(cache.TryConsume("b"));
+            Assert.IsFalse(cache.TryConsume("a"));
+
+            int winners = 0;
+            Parallel.For(0, 256, new ParallelOptions { MaxDegreeOfParallelism = 32 }, _ =>
+            {
+                if (cache.TryConsume("contended"))
+                {
+                    Interlocked.Increment(ref winners);
+                }
+            });
+            Assert.AreEqual(1, winners);
+        }
+
+        private sealed class ManualClock : TimeProvider
+        {
+            public DateTimeOffset Now = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        [TestMethod]
+        public void ReplayCacheKeepsIdsForTheRetentionWindowThenForgetsThem()
+        {
+            var clock = new ManualClock();
+            var cache = new LoginStateReplayCache(clock);
+
+            Assert.IsTrue(cache.TryConsume("a"));
+            clock.Now += TimeSpan.FromMinutes(4);
+            Assert.IsFalse(cache.TryConsume("a"), "still inside the 5 minute retention, longer than a state's 120 s");
+            clock.Now += TimeSpan.FromMinutes(3);
+            Assert.IsTrue(cache.TryConsume("a"), "retention elapsed: the id is pruned and memory stays bounded");
+            Assert.IsFalse(cache.TryConsume("a"));
+        }
+
+        [TestMethod]
+        public void ReplayCacheKeepsIdsWhenTheWallClockStepsBackwards()
+        {
+            var clock = new ManualClock();
+            var cache = new LoginStateReplayCache(clock);
+
+            clock.Now += TimeSpan.FromHours(1);
+            Assert.IsTrue(cache.TryConsume("a"));
+            clock.Now -= TimeSpan.FromHours(1);
+            Assert.IsFalse(cache.TryConsume("a"), "a backward step must not drop ids whose state may still be valid");
+            Assert.IsTrue(cache.TryConsume("b"));
+        }
+
+        [TestMethod]
+        public void KsfConfigAcceptsBoundsAndRejectsEverythingOutside()
+        {
+            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MinimumIterations, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism).TypeString);
+            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MaximumIterations, KSFConfig.MaximumCustomMemoryKiB, KSFConfig.MaximumParallelism).TypeString);
+            Assert.AreEqual("memoryConstrained", KSFConfig.Create(KSFConfigType.MemoryConstrained).TypeString);
+            Assert.AreEqual("rfcDraftRecommended", KSFConfig.CreateRfcDraftRecommended(true).TypeString);
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MinimumIterations - 1, KSFConfig.MinimumMemoryKiB, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB - 1, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism - 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MaximumParallelism + 1));
+            Assert.ThrowsException<ArgumentException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, null));
+            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
+        }
+
+        [TestMethod]
+        public void ResolverLoadsFromHostDirectoriesAndIgnoresOtherLibraries()
+        {
+            Assert.AreEqual(IntPtr.Zero, NativeLibraryResolver.Resolve("something-else", typeof(OpaqueServer).Assembly, null));
+            Assert.IsTrue(File.Exists(Path.Combine(AppContext.BaseDirectory, NativeLibraryResolver.FileName())));
+        }
+
+        [TestMethod]
+        public void PInvokeFallbackProbingIsLimitedToTheAssemblyDirectory()
+        {
+            var attribute = typeof(OpaqueServer).Assembly
+                .GetCustomAttributes(typeof(System.Runtime.InteropServices.DefaultDllImportSearchPathsAttribute), false)
+                .Cast<System.Runtime.InteropServices.DefaultDllImportSearchPathsAttribute>()
+                .SingleOrDefault();
+            Assert.IsNotNull(attribute, "CA5392: the assembly must restrict the default P/Invoke search paths");
+            Assert.AreEqual(System.Runtime.InteropServices.DllImportSearchPath.AssemblyDirectory, attribute.Paths);
+        }
+
+        [TestMethod]
+        public void ResolverNeverFallsBackToTheOperatingSystemSearch()
+        {
+            string empty = Directory.CreateTempSubdirectory().FullName;
+            string broken = Directory.CreateTempSubdirectory().FullName;
+            try
+            {
+                File.WriteAllText(Path.Combine(broken, NativeLibraryResolver.FileName()), "not a library");
+
+                var missing = Assert.ThrowsException<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty }));
+                StringAssert.Contains(missing.Message, empty);
+                StringAssert.Contains(missing.Message, System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier);
+
+                var unloadable = Assert.ThrowsException<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty, broken }));
+                StringAssert.Contains(unloadable.Message, "could not be loaded");
+                StringAssert.Contains(unloadable.Message, broken);
+            }
+            finally
+            {
+                Directory.Delete(empty, true);
+                Directory.Delete(broken, true);
+            }
         }
     }
 }
