@@ -73,9 +73,18 @@
                    arm64 build would copy the x64 library and every P/Invoke would fail silently,
                    because Helpers/FunctionHelper.TryExecute swallows the load exception.
   -->
+  <!--
+    Include, not Update: an Update only edits the default-glob None item, and the NuGet pack task
+    silently drops those from the package (a pack then succeeds with no runtimes/ at all). The
+    binaries are excluded from the glob so each is declared exactly once, below.
+  -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);*.so;*.dll;*.dylib</DefaultItemExcludes>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Linux x64 -->
-    <None Update="libopaque.so">
+    <None Include="libopaque.so">
       <Pack>True</Pack>
       <PackagePath>runtimes/linux-x64/native/libopaque.so</PackagePath>
       <Link Condition="'$(OpaqueHostRid)' == 'linux-x64'">libopaque.so</Link>
@@ -83,7 +92,7 @@
     </None>
 
     <!-- Linux arm64 -->
-    <None Update="libopaque-linux-arm64.so">
+    <None Include="libopaque-linux-arm64.so">
       <Pack>True</Pack>
       <PackagePath>runtimes/linux-arm64/native/libopaque.so</PackagePath>
       <Link Condition="'$(OpaqueHostRid)' == 'linux-arm64'">libopaque.so</Link>
@@ -91,7 +100,7 @@
     </None>
 
     <!-- Windows x64 -->
-    <None Update="opaque.dll">
+    <None Include="opaque.dll">
       <Pack>True</Pack>
       <PackagePath>runtimes/win-x64/native/opaque.dll</PackagePath>
       <Link Condition="'$(OpaqueHostRid)' == 'win-x64'">opaque.dll</Link>
@@ -99,7 +108,7 @@
     </None>
 
     <!-- Windows arm64 -->
-    <None Update="opaque-arm64.dll">
+    <None Include="opaque-arm64.dll">
       <Pack>True</Pack>
       <PackagePath>runtimes/win-arm64/native/opaque.dll</PackagePath>
       <Link Condition="'$(OpaqueHostRid)' == 'win-arm64'">opaque.dll</Link>
@@ -107,7 +116,7 @@
     </None>
 
     <!-- macOS arm64 (Apple silicon) -->
-    <None Update="libopaque.dylib">
+    <None Include="libopaque.dylib">
       <Pack>True</Pack>
       <PackagePath>runtimes/osx-arm64/native/libopaque.dylib</PackagePath>
       <Link Condition="'$(OpaqueHostRid)' == 'osx-arm64'">libopaque.dylib</Link>
@@ -115,7 +124,7 @@
     </None>
 
     <!-- macOS x64 (Intel) -->
-    <None Update="libopaque-x64.dylib">
+    <None Include="libopaque-x64.dylib">
       <Pack>True</Pack>
       <PackagePath>runtimes/osx-x64/native/libopaque.dylib</PackagePath>
       <Link Condition="'$(OpaqueHostRid)' == 'osx-x64'">libopaque.dylib</Link>
