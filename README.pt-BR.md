@@ -11,7 +11,7 @@ OPAQUE é um protocolo de troca de chaves autenticada por senha: o servidor cons
 Instale o pacote NuGet:
 
 ```sh
-dotnet add package Vaultic.OPAQUE.Net
+dotnet add package Cyphra.OPAQUE.Net
 ```
 
 Use um `OpaqueServer` e um `OpaqueClient` para realizar o cadastro uma vez e repita o fluxo de login sempre que o usuário for autenticado:

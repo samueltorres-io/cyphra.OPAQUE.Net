@@ -11,7 +11,7 @@ OPAQUE is a password-authenticated key-exchange protocol: the server can authent
 Install the NuGet package:
 
 ```sh
-dotnet add package Vaultic.OPAQUE.Net
+dotnet add package Cyphra.OPAQUE.Net
 ```
 
 Use one `OpaqueServer` and one `OpaqueClient` to complete registration once, then repeat the login flow whenever the user authenticates:

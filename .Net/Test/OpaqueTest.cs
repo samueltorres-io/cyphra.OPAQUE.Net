@@ -666,6 +666,67 @@ namespace Test
         }
 
         [TestMethod]
+        public void SealedLoginBindsClientAndServerIdentifiers()
+        {
+            const string clientId = "client-1", serverId = "server-1";
+            SetupAndRegister(User, Password, clientId, serverId, null, out string setup, out string record, out _, out _);
+            var c = new OpaqueClient();
+            var s = new OpaqueServer();
+
+            // Matching identifiers: both sides agree.
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
+            Assert.IsTrue(s.StartSealedLogin(setup, start!.StartLoginRequest, User, record, clientId, serverId, out StartSealedServerLoginResult? ok, out _));
+            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, ok!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? finished));
+            Assert.IsTrue(s.FinishSealedLogin(setup, ok.SealedLoginState, finished!.FinishLoginRequest, out string? key));
+            Assert.AreEqual(finished.SessionKey, key);
+
+            // The server answering under another identity must not yield keys on the client.
+            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start2));
+            Assert.IsTrue(s.StartSealedLogin(setup, start2!.StartLoginRequest, User, record, clientId, "server-2", out StartSealedServerLoginResult? bad, out _));
+            Assert.IsFalse(c.FinishLogin(start2.ClientLoginState, bad!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? none));
+            Assert.IsNull(none);
+        }
+
+        [TestMethod]
+        public void ReplayCacheAdmitsEachIdOnceEvenUnderContention()
+        {
+            var cache = new LoginStateReplayCache();
+            Assert.ThrowsException<ArgumentException>(() => cache.TryConsume(""));
+            Assert.ThrowsException<ArgumentNullException>(() => cache.TryConsume(null!));
+
+            Assert.IsTrue(cache.TryConsume("a"));
+            Assert.IsTrue(cache.TryConsume("b"));
+            Assert.IsFalse(cache.TryConsume("a"));
+
+            int winners = 0;
+            Parallel.For(0, 256, new ParallelOptions { MaxDegreeOfParallelism = 32 }, _ =>
+            {
+                if (cache.TryConsume("contended"))
+                {
+                    Interlocked.Increment(ref winners);
+                }
+            });
+            Assert.AreEqual(1, winners);
+        }
+
+        [TestMethod]
+        public void KsfConfigAcceptsBoundsAndRejectsEverythingOutside()
+        {
+            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MinimumIterations, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism).TypeString);
+            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MaximumIterations, KSFConfig.MaximumCustomMemoryKiB, KSFConfig.MaximumParallelism).TypeString);
+            Assert.AreEqual("memoryConstrained", KSFConfig.Create(KSFConfigType.MemoryConstrained).TypeString);
+            Assert.AreEqual("rfcDraftRecommended", KSFConfig.CreateRfcDraftRecommended(true).TypeString);
+
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism - 1));
+            Assert.ThrowsException<ArgumentException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, null));
+            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
+        }
+
+        [TestMethod]
         public void ResolverLoadsFromHostDirectoriesAndIgnoresOtherLibraries()
         {
             Assert.AreEqual(IntPtr.Zero, NativeLibraryResolver.Resolve("something-else", typeof(OpaqueServer).Assembly, null));

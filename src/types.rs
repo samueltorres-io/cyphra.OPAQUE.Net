@@ -1,47 +1,42 @@
 use crate::csharp;
 use argon2::Argon2;
 use libc::c_char;
+use std::any::TypeId;
 use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use zeroize::Zeroizing;
 
-static LIVE_RESULT_HANDLES: OnceLock<Mutex<HashSet<usize>>> = OnceLock::new();
+// Keyed by address *and* type: after a handle is freed its address can be reused by an allocation
+// of another result type, and a stale pointer must not be able to free that one as the wrong type.
+type Registry = HashSet<(usize, TypeId)>;
 
-fn live_result_handles() -> &'static Mutex<HashSet<usize>> {
-    LIVE_RESULT_HANDLES.get_or_init(|| Mutex::new(HashSet::new()))
+static LIVE_RESULT_HANDLES: OnceLock<Mutex<Registry>> = OnceLock::new();
+
+fn live_result_handles() -> MutexGuard<'static, Registry> {
+    csharp::lock_registry(LIVE_RESULT_HANDLES.get_or_init(Default::default))
 }
 
-pub fn into_result_handle<T>(value: T) -> *mut T {
+pub fn into_result_handle<T: 'static>(value: T) -> *mut T {
     let ptr = Box::into_raw(Box::new(value));
-    if let Ok(mut handles) = live_result_handles().lock() {
-        handles.insert(ptr as usize);
-        ptr
-    } else {
-        // A poisoned registry is safer than releasing an untracked allocation to C.
-        unsafe { drop(Box::from_raw(ptr)) };
-        std::ptr::null_mut()
-    }
+    live_result_handles().insert((ptr as usize, TypeId::of::<T>()));
+    ptr
 }
 
-fn release_result_handle<T>(ptr: *mut T) {
+fn release_result_handle<T: 'static>(ptr: *mut T) {
     if ptr.is_null() {
         return;
     }
-    let owned = live_result_handles()
-        .lock()
-        .map(|mut handles| handles.remove(&(ptr as usize)))
-        .unwrap_or(false);
-    if owned {
+    if live_result_handles().remove(&(ptr as usize, TypeId::of::<T>())) {
         csharp::ffi_boundary(|| unsafe { drop(Box::from_raw(ptr)) }, ());
     }
 }
 
-fn with_live_result_handle<T, R>(ptr: *mut T, action: impl FnOnce(&T) -> R) -> Option<R> {
+fn with_live_result_handle<T: 'static, R>(ptr: *mut T, action: impl FnOnce(&T) -> R) -> Option<R> {
     if ptr.is_null() {
         return None;
     }
-    let handles = live_result_handles().lock().ok()?;
-    if !handles.contains(&(ptr as usize)) {
+    let handles = live_result_handles();
+    if !handles.contains(&(ptr as usize, TypeId::of::<T>())) {
         return None;
     }
     // The registry lock is held until `action` returns, preventing concurrent release.

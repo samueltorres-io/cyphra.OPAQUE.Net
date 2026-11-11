@@ -79,27 +79,21 @@ impl Ksf for types::CustomKsf {
     }
 }
 
-fn build_argon2_ksf(
-    t_cost: u32,
-    m_cost: u32,
-    parallelism: u32,
-) -> Result<Option<types::CustomKsf>, Error> {
-    let mut param_builder = ParamsBuilder::default();
-    param_builder.t_cost(t_cost);
-    param_builder.m_cost(m_cost);
-    param_builder.p_cost(parallelism);
-
-    if let Ok(params) = param_builder.build() {
-        let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-        return Ok(Some(types::CustomKsf { argon }));
-    }
-
-    Err(Error::InvalidKsf)
+fn build_argon2_ksf(t_cost: u32, m_cost: u32, parallelism: u32) -> Result<types::CustomKsf, Error> {
+    let params = ParamsBuilder::new()
+        .t_cost(t_cost)
+        .m_cost(m_cost)
+        .p_cost(parallelism)
+        .build()
+        .map_err(|_| Error::InvalidKsf)?;
+    Ok(types::CustomKsf {
+        argon: Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
+    })
 }
 
 fn get_custom_ksf(
     ksf_config: types::KeyStretchingFunctionConfig,
-) -> Result<Option<types::CustomKsf>, Error> {
+) -> Result<types::CustomKsf, Error> {
     match ksf_config {
         types::KeyStretchingFunctionConfig::RfcDraftRecommended => {
             build_argon2_ksf(1, u32::pow(2, 21) - 1, 4)
@@ -209,7 +203,7 @@ fn try_create_ksf_config(
 ) -> Result<types::KeyStretchingFunctionConfig, Error> {
     let ksf_config_type = ffi_string(csharp_config_type)?;
 
-    let ksf = match ksf_config_type.as_str() {
+    match ksf_config_type.as_str() {
         "rfcDraftRecommended" => Ok(types::KeyStretchingFunctionConfig::RfcDraftRecommended),
         "memoryConstrained" => Ok(types::KeyStretchingFunctionConfig::MemoryConstrained),
         "custom" => {
@@ -235,9 +229,7 @@ fn try_create_ksf_config(
             })
         }
         _ => Err(Error::InvalidKsf),
-    };
-
-    ksf
+    }
 }
 
 fn get_identifiers(idents: &Option<types::CustomIdentifiers>) -> Identifiers<'_> {
@@ -394,7 +386,7 @@ fn internal_finish_client_login(
     let finish_params = ClientLoginFinishParameters::new(
         None,
         get_identifiers(&params.identifiers),
-        custom_ksf.as_ref(),
+        Some(&custom_ksf),
     );
 
     let result = state.finish(
@@ -447,7 +439,7 @@ fn internal_finish_client_registration(
 
     let finish_params = ClientRegistrationFinishParameters::new(
         get_identifiers(&params.identifiers),
-        custom_ksf.as_ref(),
+        Some(&custom_ksf),
     );
 
     let client_finish_registration_result = state
@@ -896,6 +888,46 @@ mod tests {
     }
 
     #[test]
+    fn named_ksf_profiles_build_and_unknown_profile_is_rejected() {
+        assert!(get_custom_ksf(types::KeyStretchingFunctionConfig::RfcDraftRecommended).is_ok());
+        assert!(get_custom_ksf(types::KeyStretchingFunctionConfig::MemoryConstrained).is_ok());
+
+        let c = |s: &str| CString::new(s).unwrap();
+        let (kind, empty) = (c("bogus"), c(""));
+        let (p0, p1, p2) = (
+            empty.as_ptr() as *mut c_char,
+            empty.as_ptr() as *mut c_char,
+            empty.as_ptr() as *mut c_char,
+        );
+        assert!(try_create_ksf_config(kind.as_ptr() as *mut c_char, p0, p1, p2).is_err());
+        // "custom" with a missing value must not fall back to a default.
+        let custom = c("custom");
+        assert!(try_create_ksf_config(custom.as_ptr() as *mut c_char, p0, p1, p2).is_err());
+    }
+
+    #[test]
+    fn identifiers_are_optional_individually_and_length_limited() {
+        let c = |s: &str| CString::new(s).unwrap();
+        let ids = |client: &CString, server: &CString| {
+            try_create_identifiers(
+                client.as_ptr() as *mut c_char,
+                server.as_ptr() as *mut c_char,
+            )
+        };
+        let (empty, alice, srv) = (c(""), c("alice"), c("srv"));
+
+        assert!(ids(&empty, &empty).ok().unwrap().is_none());
+        let only_server = ids(&empty, &srv).ok().unwrap().unwrap();
+        assert!(only_server.client.is_none() && only_server.server.as_deref() == Some("srv"));
+        let only_client = ids(&alice, &empty).ok().unwrap().unwrap();
+        assert!(only_client.client.as_deref() == Some("alice") && only_client.server.is_none());
+
+        let too_long = c(&"x".repeat(MAX_IDENTIFIER_LEN + 1));
+        assert!(ids(&too_long, &empty).is_err());
+        assert!(ids(&empty, &too_long).is_err());
+    }
+
+    #[test]
     fn rejects_non_numeric_ffi_ksf_parameters() {
         let kind = CString::new("custom").expect("static test input is valid");
         let iterations = CString::new("not-a-number").expect("static test input is valid");
@@ -934,6 +966,22 @@ mod tests {
         assert!(!result.is_null());
         types::free_start_client_login_result(result);
         types::free_start_client_login_result(result);
+    }
+
+    #[test]
+    fn result_handles_ignore_release_as_the_wrong_type() {
+        let password = CString::new("password").unwrap();
+        let result = start_client_login(password.as_ptr() as *mut c_char);
+        assert!(!result.is_null());
+
+        // Same address, wrong type: must be a no-op, not a drop of the login result as another type.
+        types::free_start_client_registration_result(result.cast());
+        let request = types::get_start_client_login_result_request(result);
+        assert!(!request.is_null(), "handle must still be alive");
+        csharp::free_string(request as *mut c_char);
+
+        types::free_start_client_login_result(result);
+        assert!(types::get_start_client_login_result_request(result).is_null());
     }
 
     #[test]

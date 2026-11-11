@@ -27,7 +27,7 @@ The package namespace is `OPAQUE.Net`.
 | Type | Important values |
 | --- | --- |
 | `StartClientRegistrationResult` | `ClientRegistrationState`, `RegistrationRequest` |
-| `FinishClientRegistrationResult` | `RegistrationRecord`, `ExportKey`, `ServerStaicPublicKey` |
+| `FinishClientRegistrationResult` | `RegistrationRecord`, `ExportKey`, `ServerStaticPublicKey` |
 | `StartClientLoginResult` | `ClientLoginState`, `StartLoginRequest` |
 | `StartSealedServerLoginResult` | `SealedLoginState`, `LoginResponse` |
 | `StartServerLoginResult` (obsolete) | `ServerLoginState`, `LoginResponse` |
