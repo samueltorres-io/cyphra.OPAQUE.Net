@@ -1,18 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.6.0
 
 - **Native dependencies bumped:** `argon2` 0.6, `hkdf` 0.13 (with `sha2` 0.11, which it requires), `chacha20poly1305` 0.11, `base64` 0.23, `libc`, `zeroize`, plus a full `Cargo.lock` refresh. Argon2id, HKDF-SHA512 and XChaCha20-Poly1305 outputs are byte-identical to the previous versions (checked with fixed vectors), so existing registrations and sealed states stay valid. `generic-array` stays on 0.14: opaque-ke 3.0's `Ksf` trait is defined over it, and 0.14.9 deprecates its API, so the use is scoped with `#[allow(deprecated)]`.
 - The `opaque-ke` `argon2` feature is no longer enabled (the library uses its own Argon2 key stretching), which removes `argon2` 0.5, `blake2` 0.10 and `password-hash` 0.5 from the build.
-- **Packaging fix.** The `.nupkg` was produced without any `runtimes/<rid>/native` entries (`<None Update>` is dropped by the pack task), which failed the publish verification step. The native libraries are now declared with `Include`.
 - New `deny.toml` for `cargo deny check` (licenses, bans, sources, advisories).
-
-## 1.6.0
-
 - **BREAKING: `RfcDraftRecommended` memory is now exactly 2^21 KiB** (it was 2^21 - 1, which Argon2 rounds down), matching draft-irtf-cfrg-opaque-16. Records created with this profile no longer authenticate and must be re-registered; `MemoryConstrained` and `Custom` are unchanged.
 - **Sealed server login state (#13, F-01).** New `OpaqueServer.StartSealedLogin` / `FinishSealedLogin` and `StartSealedServerLoginResult`. The server state is encrypted and authenticated (XChaCha20-Poly1305, key derived from `serverSetup` with HKDF-SHA512) and expires after 120 s, so it can no longer be used to forge the client's finish message or read the session key. It stays stateless: any instance sharing the setup can finish a login. New overload `FinishSealedLogin(…, Func<string, bool> tryConsume, …)` and `LoginStateReplayCache` enforce single use (#14, F-02): the state id is consumed only after the login verifies, and a second use fails. Multi-instance deployments must back `tryConsume` with shared storage.
 - `OpaqueServer.StartLogin` and `FinishLogin(serverLoginState, …)` are `[Obsolete]`: the raw state they produce is a bearer secret. They keep working and will be removed in 2.0. Migration: replace the pair with `StartSealedLogin` / `FinishSealedLogin(serverSetup, …)`; sealed and raw states are not interchangeable, so finish in-flight logins with the API that started them.
-- New native dependencies: `chacha20poly1305` (and its RustCrypto dependencies).
 - **Strict native library loading (F-09, F-10).** The library is loaded only from directories resolved by the .NET host; the OS search of a bare name is no longer a fallback. Load failures throw `DllNotFoundException` naming the runtime identifier and the probed (or found-but-unloadable) paths. Applications that relied on `LD_LIBRARY_PATH`/`PATH` to supply the native library must deploy it with the app (the NuGet `runtimes/<rid>/native` layout already does).
 - Building for an unsupported runtime identifier (musl, `win-x86`, `linux-arm`, mobile, browser) now warns with `OPAQUE001`. `FunctionHelper` is hidden from IntelliSense and becomes internal in 2.0.
 - **Unsupported runtime identifiers (#17).** `docs/building.md` now lists them, the run-time failure mode, how to turn `OPAQUE001` into an error, and the Alpine workaround (glibc base image).
