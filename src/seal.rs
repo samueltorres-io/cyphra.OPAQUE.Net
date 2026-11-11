@@ -41,7 +41,7 @@ fn cipher(setup: &[u8]) -> Result<XChaCha20Poly1305, SealError> {
     Hkdf::<Sha512>::new(None, setup)
         .expand(KDF_INFO, &mut *key)
         .map_err(|_| SealError)?;
-    Ok(XChaCha20Poly1305::new(key.as_slice().into()))
+    XChaCha20Poly1305::new_from_slice(&*key).map_err(|_| SealError)
 }
 
 pub fn seal(setup: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>, SealError> {
@@ -53,7 +53,7 @@ pub fn seal(setup: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>, SealError> 
     OsRng.fill_bytes(&mut nonce);
     let ciphertext = cipher(setup)?
         .encrypt(
-            XNonce::from_slice(&nonce),
+            &XNonce::from(nonce),
             Payload {
                 msg: &plaintext,
                 aad: &[VERSION],
@@ -75,10 +75,13 @@ pub fn open(setup: &[u8], sealed: &[u8], now: u64) -> Result<Zeroizing<Vec<u8>>,
         return Err(SealError);
     }
     let (nonce, ciphertext) = sealed[1..].split_at(NONCE_LEN);
+    let mut n = [0u8; NONCE_LEN];
+    n.copy_from_slice(nonce);
+    let nonce = XNonce::from(n);
     let plaintext = Zeroizing::new(
         cipher(setup)?
             .decrypt(
-                XNonce::from_slice(nonce),
+                &nonce,
                 Payload {
                     msg: ciphertext,
                     aad: &[VERSION],
