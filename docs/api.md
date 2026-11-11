@@ -22,6 +22,10 @@ The package namespace is `OPAQUE.Net`.
 - `FinishSealedLogin(serverSetup, sealedLoginState, finishLoginRequest, out serverSessionKey)` completes login. It fails for a state that was altered, expired (2 minutes), or sealed under another setup.
 - `StartLogin` / `FinishLogin(serverLoginState, …)` are obsolete: the raw state they use is a bearer secret (see [security](security.md)).
 
+## `LoginStateReplayCache`
+
+`TryConsume(id)` returns true the first time an id is seen and false afterwards, for 5 minutes (longer than a sealed state lives). It is thread-safe and in-memory, so it is correct only for a single server instance and forgets everything on restart; use shared storage with an atomic set-if-absent for several instances or restarts. Pass `TryConsume` as the `tryConsume` argument of `FinishSealedLogin`.
+
 ## Result objects
 
 | Type | Important values |

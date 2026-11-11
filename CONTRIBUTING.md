@@ -23,13 +23,15 @@ The repository contains the managed wrapper in `.Net/OPAQUE.Net`, the Rust imple
 
 ## Local workflow
 
-Run the Rust tests:
+Run the same Rust checks as CI (formatting, lints as errors, tests with every feature):
 
 ```sh
-cargo test --locked
+cargo fmt --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --all-features --locked
 ```
 
-Run the .NET tests:
+Rebuild the native library and copy it next to the wrapper (see [`docs/building.md`](docs/building.md)), then run the .NET tests on both target frameworks:
 
 ```sh
 dotnet test .Net/Test/Test.csproj --configuration Release

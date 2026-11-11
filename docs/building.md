@@ -72,7 +72,7 @@ Releases are packed only by `publish.yaml`, from natives built by CI for that ex
 dotnet pack .Net/OPAQUE.Net/OPAQUE.Net.csproj --configuration Release --output ./artifacts
 ```
 
-The project fails packing when a required native asset is missing. Inspect the package and confirm all six runtime assets are present before publishing. The `publish` workflow performs the same package verification and publishes only after a release or manual dispatch.
+The project fails packing when a required native asset is missing. Inspect the package and confirm all six runtime assets are present before publishing. The `publish` workflow performs the same package verification (including both `lib/net8.0` and `lib/net10.0`) and runs only when a GitHub release is published; the release tag `vX.Y.Z` sets the package version.
 
 ## Adding a platform
 

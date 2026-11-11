@@ -29,7 +29,7 @@ OPAQUE does not replace TLS, endpoint security, rate limiting, account recovery 
 - protect `serverSetup` with a secrets manager and restrict access;
 - protect registration records and avoid placing them in logs;
 - use authenticated transport and bind the protocol to the intended account/context;
-- rate-limit and monitor login attempts;
+- rate-limit and monitor login attempts, per account and per source. OPAQUE removes offline guessing from a stolen database, but every `StartLogin` request is one password guess an online attacker can test, so the server must bound them;
 - treat export keys and session keys as secrets;
 - use `StartSealedLogin` / `FinishSealedLogin` for the server side of login. The sealed state is encrypted and authenticated with a key derived from `serverSetup` (XChaCha20-Poly1305, HKDF-SHA512), so it exposes nothing, cannot be forged or altered, is bound to your setup and expires after two minutes; every instance of your service must share the same `serverSetup` and have a reasonably synchronized clock (NTP), because the expiry is checked against the local clock. It is not single-use by itself: pass `tryConsume` to `FinishSealedLogin` (shared atomic storage across instances, or `LoginStateReplayCache` for one instance) to reject a replay inside the window. The raw `ServerLoginState` of the obsolete `StartLogin` holds the session key in clear and the key that verifies the client's finish message, so whoever has it can finish the login without the password: never send it to the client or put it in a cookie, URL, log or shared cache;
 - avoid revealing whether a user exists or which protocol step failed;
