@@ -12,6 +12,19 @@ updates:
     target-branch: develop
     schedule:
       interval: weekly
+    # One PR per week for the safe updates instead of one per crate. Majors stay separate PRs.
+    groups:
+      rust-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # opaque-ke 4.x changes the Ciphersuite/KeyExchange API and the ServerSetup/ServerRegistration
+      # formats, and generic-array 1.x must move together with it (opaque-ke 3.x is built on 0.14, so
+      # bumping either alone fails to compile: see PRs #40 and #41). Both are one planned migration to a
+      # 2.0.0 release; remove these entries when that work starts.
+      - dependency-name: opaque-ke
+        update-types: ["version-update:semver-major"]
+      - dependency-name: generic-array
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: nuget
     directory: /.Net
     target-branch: develop

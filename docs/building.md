@@ -80,5 +80,5 @@ Update the runtime asset table and all of the following together:
 
 1. the native asset entries and validation in `OPAQUE.Net.csproj`;
 2. the build/test matrix in `.github/workflows/build-and-test.yaml`;
-3. the package verification in `.github/workflows/publish.yaml`;
+3. the staging list and expected package entries in `scripts/pack-and-verify.sh` (run by both `publish.yaml` and every PR);
 4. the documentation and tests.
