@@ -135,16 +135,15 @@ jobs:
             cargo-${{ matrix.rid }}-
 
       # Zig acts as the cross-linker and carries its own glibc stubs, which is what makes an
-      # explicit glibc floor possible. Installed from PyPI because that is far quicker than a
-      # source build of Zig itself.
+      # explicit glibc floor possible. Both zig and cargo-zigbuild come from hash-pinned PyPI
+      # wheels (no `cargo install`, which cannot be checksum-pinned and runs build scripts).
       - name: Install cargo-zigbuild
         if: matrix.zig_target != ''
         run: |
           set -euo pipefail
           python3 -m pip install --quiet --user --require-hashes -r .github/requirements-zig.txt
-          if ! command -v cargo-zigbuild >/dev/null 2>&1; then
-            cargo install --locked cargo-zigbuild --version 0.20.1
-          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           # Not `cargo zigbuild --version`: that routes --version into the zigbuild subcommand,
           # which rejects it. Check the thing most likely to actually be broken instead — that zig
           # itself is reachable — plus that the binary landed on PATH.
