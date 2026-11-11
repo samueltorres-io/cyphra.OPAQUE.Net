@@ -16,6 +16,7 @@
 - **Native handle registries (hardening).** The result-handle registry is keyed by address and type, so a stale pointer whose address was reused by another result type can no longer free it as the wrong type, and a panic while a registry lock is held no longer poisons it (it used to make every later native call return null for the rest of the process).
 - **Docs.** The README install command named the upstream `Vaultic.OPAQUE.Net` package instead of `Cyphra.OPAQUE.Net`; `docs/api.md` and `docs/usage.md` no longer present the obsolete `ServerStaicPublicKey` spelling as current.
 - **Tests.** Added coverage for sealed login with client/server identifiers, `LoginStateReplayCache` under contention, `KSFConfig` bounds, named KSF profiles, identifier parsing and wrong-type handle release.
+- **BREAKING: `RfcDraftRecommended` memory is now exactly 2^21 KiB** (it was 2^21 - 1, which Argon2 rounds down), matching draft-irtf-cfrg-opaque-16. Records created with this profile no longer authenticate and must be re-registered; `MemoryConstrained` and `Custom` are unchanged.
 
 ## 1.5.0
 

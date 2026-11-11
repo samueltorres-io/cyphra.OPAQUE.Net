@@ -56,6 +56,8 @@ const BASE64: b64::GeneralPurpose = b64::URL_SAFE_NO_PAD;
 const MAX_ENCODED_PROTOCOL_MESSAGE_LEN: usize = 64 * 1024;
 const MAX_PASSWORD_LEN: usize = 1024;
 const MAX_IDENTIFIER_LEN: usize = 1024;
+// draft-irtf-cfrg-opaque-16: Argon2id(S = zeroes(16), p = 4, m = 2^21, t = 1).
+const RFC_DRAFT_MEMORY_KIB: u32 = 1 << 21;
 const MIN_CUSTOM_MEMORY_KIB: u32 = 64 * 1024;
 // The RFC profile is an explicit caller-selected compatibility profile. Custom profiles are
 // capped to a practical per-operation budget so untrusted application configuration cannot turn
@@ -96,7 +98,7 @@ fn get_custom_ksf(
 ) -> Result<types::CustomKsf, Error> {
     match ksf_config {
         types::KeyStretchingFunctionConfig::RfcDraftRecommended => {
-            build_argon2_ksf(1, u32::pow(2, 21) - 1, 4)
+            build_argon2_ksf(1, RFC_DRAFT_MEMORY_KIB, 4)
         }
         types::KeyStretchingFunctionConfig::MemoryConstrained => {
             build_argon2_ksf(3, u32::pow(2, 16), 4)
@@ -889,7 +891,12 @@ mod tests {
 
     #[test]
     fn named_ksf_profiles_build_and_unknown_profile_is_rejected() {
-        assert!(get_custom_ksf(types::KeyStretchingFunctionConfig::RfcDraftRecommended).is_ok());
+        let rfc = get_custom_ksf(types::KeyStretchingFunctionConfig::RfcDraftRecommended)
+            .ok()
+            .unwrap();
+        assert_eq!(rfc.argon.params().m_cost(), 1 << 21);
+        assert_eq!(rfc.argon.params().t_cost(), 1);
+        assert_eq!(rfc.argon.params().p_cost(), 4);
         assert!(get_custom_ksf(types::KeyStretchingFunctionConfig::MemoryConstrained).is_ok());
 
         let c = |s: &str| CString::new(s).unwrap();
