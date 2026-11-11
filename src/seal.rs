@@ -27,11 +27,13 @@ pub const STATE_TTL_SECS: u64 = 120;
 #[derive(Debug)]
 pub struct SealError;
 
-pub fn unix_now() -> u64 {
+/// Fails (instead of substituting 0) when the clock reads before 1970: 0 would satisfy every
+/// `now <= expiry` check and silently disable expiry.
+pub fn unix_now() -> Result<u64, SealError> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
-        .unwrap_or(0)
+        .map_err(|_| SealError)
 }
 
 fn cipher(setup: &[u8]) -> Result<XChaCha20Poly1305, SealError> {

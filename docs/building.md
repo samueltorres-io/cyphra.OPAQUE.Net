@@ -23,7 +23,7 @@ Only the six RIDs above have a native library. Linux support is **glibc only**: 
 
 ## Prerequisites
 
-- .NET SDK 8 or later;
+- .NET SDK 8 and 10 (the test project targets `net8.0` and `net10.0`; with only SDK 8 add `-f net8.0` to `dotnet test`);
 - `rustup` and the toolchain pinned in `rust-toolchain.toml`;
 - the Rust target for the platform being built;
 - `cargo-zigbuild` and Zig for Linux cross-compilation.

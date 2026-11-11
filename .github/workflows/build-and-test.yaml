@@ -28,6 +28,23 @@ permissions:
   contents: read
 
 jobs:
+  # Separate job on purpose: `cargo install` cannot be checksum-pinned and runs build scripts, so it
+  # must not share a runner with the jobs whose output is packed. Still gates releases, because
+  # publish.yaml needs this whole workflow to pass. Fails on known-vulnerable dependencies; warnings
+  # such as unsound/unmaintained advisories do not fail it. Ignores live in .cargo/audit.toml.
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Audit Cargo.lock
+        run: |
+          cargo +stable install --locked cargo-audit --version 0.22.2
+          cargo audit
+
   build_and_test:
     name: Build and test (${{ matrix.rid }})
     runs-on: ${{ matrix.os }}
@@ -112,14 +129,6 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets --all-features --locked -- -D warnings
           cargo test --all-features --locked
-
-      # Fails on known-vulnerable dependencies (e.g. curve25519-dalek < 4.1.3, RUSTSEC-2024-0344).
-      # Warnings such as unsound/unmaintained advisories do not fail the step.
-      - name: Audit dependencies
-        if: matrix.rid == 'linux-x64'
-        run: |
-          cargo install --locked cargo-audit --version 0.22.2
-          cargo audit
 
       - name: Cache cargo registry and build directory
         if: github.event_name != 'release'
@@ -234,7 +243,7 @@ jobs:
             10.0.x
 
       # Both projects are AnyCPU, so a solution build and a bare project build resolve the same
-      # output directory (bin/<config>/net8.0) and --no-build is safe either way. Going through the
+      # output directory per target framework (bin/<config>/net8.0, net10.0 for the tests) and --no-build is safe either way. Going through the
       # solution just exercises both projects in one command.
       #
       # Do not reintroduce a <Platforms>/Platform pin here or in the csproj files: it stamps the

@@ -627,7 +627,12 @@ fn start_server_login_impl(
                 identifiers,
             };
             let started = if sealed {
-                internal_start_server_login_sealed(params, seal::unix_now())
+                match seal::unix_now() {
+                    Ok(now) => internal_start_server_login_sealed(params, now),
+                    Err(_) => {
+                        return types::into_result_handle(types::StartServerLoginResult::default())
+                    }
+                }
             } else {
                 internal_start_server_login(params)
             };
@@ -719,11 +724,14 @@ pub extern "C" fn finish_server_login_sealed(
             let rust_finish_login_request =
                 ffi_input!(csharp_finish_login_request, std::ptr::null_mut());
 
+            let Ok(now) = seal::unix_now() else {
+                return csharp::rust_string_to_csharp_string_handle("");
+            };
             if let Ok(result) = internal_finish_server_login_sealed(
                 &rust_server_setup,
                 &rust_sealed_state,
                 &rust_finish_login_request,
-                seal::unix_now(),
+                now,
             ) {
                 return csharp::rust_string_to_csharp_string_handle(&result);
             }
