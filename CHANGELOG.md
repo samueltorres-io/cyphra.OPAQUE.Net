@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+No change to the library's behavior or public API.
+
+### Dependencies
+
+- Linux builds use Zig 0.17.1 and `cargo-zigbuild` 0.24.1 (from 0.13.0 and 0.20.1); the glibc 2.17 floor is unchanged.
+- Test project: MSTest 4.5.2 (from 3.1.1), Microsoft.NET.Test.Sdk 18.11.0 (from 17.8.0), coverlet.collector 10.1.0 (from 6.0.0). The tests use `Assert.ThrowsExactly`, since MSTest 4 removed `Assert.ThrowsException`.
+
+### Tests
+
+- Every result type that holds secrets is checked for a redacted `ToString()`, not only `StartSealedServerLoginResult`.
+
+### Docs
+
+- `docs/` is reorganized by audience: `guide/`, `reference/`, `security/` and `development/`, with new pages for supported platforms, the security policy and releases. Content is synced with 2.0: result handles are tokens, `KSFConfig` crosses the FFI as numbers, and `StartSealedLogin` accepts a null record for unknown users.
+- Code comments are removed from the C# and Rust sources. The public XML docs (IntelliSense) stay, and the design rationale moved to `docs/`.
+
 ## 2.0.0
 
 Security and cleanup release from a full audit. **Breaking**: read "Migrating from 1.x" first.

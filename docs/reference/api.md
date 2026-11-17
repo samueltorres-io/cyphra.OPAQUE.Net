@@ -33,7 +33,7 @@ Identifiers and `KSFConfig` must be identical at registration and login, or logi
 | `CreateSetup(out serverSetup)` | Creates the server's long-term setup secret. |
 | `GetPublicKey(serverSetup, out publicKey)` | Derives the public key. Also the way to validate a stored setup at startup. |
 | `CreateRegistrationResponse(serverSetup, userIdentifier, registrationRequest, out response)` | Processes client registration. |
-| `StartSealedLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` | Starts server login and returns the server state sealed under the setup. The extended overload adds `clientIdentifier` and `serverIdentifier`. |
+| `StartSealedLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` | Starts server login and returns the server state sealed under the setup. The extended overload adds `clientIdentity` and `serverIdentity` (the client-side names are `clientIdentifier` and `serverIdentifier`; pass the same values on both sides). |
 | `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)` | Completes login, once. |
 
 **`StartSealedLogin`**
