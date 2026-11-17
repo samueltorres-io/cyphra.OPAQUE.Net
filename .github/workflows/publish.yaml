@@ -23,7 +23,7 @@ jobs:
     uses: ./.github/workflows/build-and-test.yaml
 
   create_nuget:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build_native
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,7 +78,7 @@ jobs:
         path: ${{ env.NuGetDirectory }}/*.nupkg
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: create_nuget
     # Gate the API key behind a GitHub Environment (add required reviewers in repo settings).
     environment: nuget

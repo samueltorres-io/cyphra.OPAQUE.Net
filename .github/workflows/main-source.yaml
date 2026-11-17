@@ -10,7 +10,7 @@ permissions: {}
 
 jobs:
   from_develop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # A fork can name its branch develop too: require this repository's own develop.
       - env:

@@ -36,7 +36,7 @@ jobs:
   # additionally enforces deny.toml (licenses, sources, wildcard bans, advisories).
   audit:
     name: Audit dependencies
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -68,7 +68,7 @@ jobs:
           # Debian 11/12, RHEL 8/9, Amazon Linux 2 and older Ubuntu LTS releases. They are still
           # *tested* natively, on a runner of their own architecture, further down.
           - rid: linux-x64
-            os: ubuntu-latest
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             zig_target: x86_64-unknown-linux-gnu.2.17
             cargo_out: libopaque.so
@@ -290,7 +290,7 @@ jobs:
     name: Verify package layout
     if: github.event_name != 'release'
     needs: build_and_test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
