@@ -52,7 +52,7 @@ string exportKey = finish.ExportKey;
 string serverStaticPublicKey = finish.ServerStaticPublicKey;
 ```
 
-Only `registrationRecord` is required by the server for later login. The export key is client-side material and should be handled as a secret. `FinishClientRegistrationResult` also keeps the misspelled `ServerStaicPublicKey` as an `[Obsolete]` alias of `ServerStaticPublicKey`; use the correctly spelled property.
+Only `registrationRecord` is required by the server for later login. The export key is client-side material and should be handled as a secret.
 
 ## Login
 

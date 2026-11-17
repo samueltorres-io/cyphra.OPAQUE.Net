@@ -25,17 +25,11 @@ use libc::c_char;
 mod types;
 
 // Deliberately payload-free: a cause attached here could reach callers and tell an attacker which
-// protocol step rejected their input. The FFI boundary collapses every variant to an empty result.
-enum Error {
-    Protocol,
-    Base64,
-    InvalidKsf,
-    InputTooLarge,
-    Ffi,
-}
+// protocol step rejected their input. Every failure is the same value and becomes an empty result.
+struct Error;
 
 fn protocol_error(_: ProtocolError) -> Error {
-    Error::Protocol
+    Error
 }
 
 struct DefaultCipherSuite;
@@ -57,7 +51,7 @@ impl CipherSuite for DefaultCipherSuite {
 }
 
 const BASE64: b64::GeneralPurpose = b64::URL_SAFE_NO_PAD;
-const MAX_ENCODED_PROTOCOL_MESSAGE_LEN: usize = 64 * 1024;
+const MAX_ENCODED_PROTOCOL_MESSAGE_LEN: usize = csharp::MAX_FFI_STRING_LEN;
 const MAX_PASSWORD_LEN: usize = 1024;
 const MAX_IDENTIFIER_LEN: usize = 1024;
 // draft-irtf-cfrg-opaque-16: Argon2id(S = zeroes(16), p = 4, m = 2^21, t = 1).
@@ -69,8 +63,6 @@ const MIN_CUSTOM_MEMORY_KIB: u32 = 64 * 1024;
 const MAX_CUSTOM_MEMORY_KIB: u32 = 256 * 1024;
 const MAX_CUSTOM_ITERATIONS: u32 = 10;
 const MAX_CUSTOM_PARALLELISM: u32 = 16;
-
-type JsResult<T> = Result<T, Error>;
 
 #[allow(deprecated)]
 impl Ksf for types::CustomKsf {
@@ -103,7 +95,7 @@ fn build_argon2_ksf(t_cost: u32, m_cost: u32, parallelism: u32) -> Result<types:
         .m_cost(m_cost)
         .p_cost(parallelism)
         .build()
-        .map_err(|_| Error::InvalidKsf)?;
+        .map_err(|_| Error)?;
     Ok(types::CustomKsf {
         argon: Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
     })
@@ -128,25 +120,22 @@ fn get_custom_ksf(
                 || !(MIN_CUSTOM_MEMORY_KIB..=MAX_CUSTOM_MEMORY_KIB).contains(&memory)
                 || !(1..=MAX_CUSTOM_PARALLELISM).contains(&parallelism)
             {
-                return Err(Error::InvalidKsf);
+                return Err(Error);
             }
             build_argon2_ksf(iterations, memory, parallelism)
         }
     }
 }
 
-fn base64_decode(input: &str) -> JsResult<Zeroizing<Vec<u8>>> {
+fn base64_decode(input: &str) -> Result<Zeroizing<Vec<u8>>, Error> {
     if input.len() > MAX_ENCODED_PROTOCOL_MESSAGE_LEN {
-        return Err(Error::InputTooLarge);
+        return Err(Error);
     }
-    BASE64
-        .decode(input)
-        .map(Zeroizing::new)
-        .map_err(|_| Error::Base64)
+    BASE64.decode(input).map(Zeroizing::new).map_err(|_| Error)
 }
 
 fn ffi_string(ptr: *const c_char) -> Result<Zeroizing<String>, Error> {
-    csharp::csharp_string_to_rust_string(ptr).map_err(|_| Error::Ffi)
+    csharp::csharp_string_to_rust_string(ptr).map_err(|_| Error)
 }
 
 macro_rules! ffi_input {
@@ -160,7 +149,7 @@ macro_rules! ffi_input {
 
 fn checked_input(value: Zeroizing<String>, limit: usize) -> Result<String, Error> {
     if value.len() > limit {
-        Err(Error::Ffi)
+        Err(Error)
     } else {
         Ok(String::clone(&value))
     }
@@ -172,7 +161,7 @@ pub fn internal_create_server_setup() -> String {
     BASE64.encode(setup.serialize())
 }
 
-fn decode_server_setup(data: &str) -> JsResult<ServerSetup<DefaultCipherSuite>> {
+fn decode_server_setup(data: &str) -> Result<ServerSetup<DefaultCipherSuite>, Error> {
     base64_decode(data).and_then(|bytes| {
         ServerSetup::<DefaultCipherSuite>::deserialize(&bytes).map_err(protocol_error)
     })
@@ -191,26 +180,12 @@ fn try_create_identifiers(
     let rust_client = checked_input(ffi_string(csharp_client)?, MAX_IDENTIFIER_LEN)?;
     let rust_server = checked_input(ffi_string(csharp_server)?, MAX_IDENTIFIER_LEN)?;
 
-    if rust_client.is_empty() && rust_server.is_empty() {
+    let non_empty = |value: String| (!value.is_empty()).then_some(value);
+    let (client, server) = (non_empty(rust_client), non_empty(rust_server));
+    if client.is_none() && server.is_none() {
         return Ok(None);
     }
-
-    let optional_rust_client: Option<String> = if rust_client.is_empty() {
-        None
-    } else {
-        Some(rust_client)
-    };
-
-    let optional_rust_server: Option<String> = if rust_server.is_empty() {
-        None
-    } else {
-        Some(rust_server)
-    };
-
-    Ok(Some(types::CustomIdentifiers::new(
-        optional_rust_client,
-        optional_rust_server,
-    )))
+    Ok(Some(types::CustomIdentifiers { client, server }))
 }
 
 /// Maps the managed `KSFConfigType` (0 = RFC draft, 1 = memory constrained, 2 = custom); the cost
@@ -229,7 +204,7 @@ fn try_create_ksf_config(
             memory,
             parallelism,
         }),
-        _ => Err(Error::InvalidKsf),
+        _ => Err(Error),
     }
 }
 
@@ -251,9 +226,10 @@ fn internal_create_server_registration_response(
     let registration_request_bytes = base64_decode(&params.registration_request)?;
     let registration_request =
         RegistrationRequest::deserialize(&registration_request_bytes).map_err(protocol_error)?;
-    // opaque-ke ignores trailing bytes; require the canonical encoding like every other parser.
+    // opaque-ke 3.0 accepts trailing bytes only here (voprf `take_ext`); every other message it
+    // parses is exact-size. Require the canonical encoding.
     if registration_request.serialize().len() != registration_request_bytes.len() {
-        return Err(Error::Base64);
+        return Err(Error);
     }
     let server_registration_start_result = ServerRegistration::<DefaultCipherSuite>::start(
         &server_setup,
@@ -335,7 +311,7 @@ fn internal_start_server_login_sealed(
     let setup_bytes = base64_decode(&params.server_setup)?;
     let user = params.user_identifier.clone();
     let (state, login_response) = start_server_login_raw(&setup_bytes, params)?;
-    let sealed = seal::seal(&setup_bytes, user.as_bytes(), &state, now).map_err(|_| Error::Ffi)?;
+    let sealed = seal::seal(&setup_bytes, user.as_bytes(), &state, now).map_err(|_| Error)?;
     Ok(types::StartServerLoginResult {
         server_login_state: Zeroizing::new(BASE64.encode(sealed)),
         login_response,
@@ -351,8 +327,8 @@ fn internal_finish_server_login_sealed(
 ) -> Result<Zeroizing<String>, Error> {
     let setup_bytes = base64_decode(server_setup)?;
     let sealed = base64_decode(sealed_state)?;
-    let state_bytes = seal::open(&setup_bytes, user_identifier.as_bytes(), &sealed, now)
-        .map_err(|_| Error::Ffi)?;
+    let state_bytes =
+        seal::open(&setup_bytes, user_identifier.as_bytes(), &sealed, now).map_err(|_| Error)?;
     finish_server_login_from_bytes(&state_bytes, finish_login_request)
 }
 
@@ -500,26 +476,18 @@ pub extern "C" fn finish_client_registration(
                 csharp_config_parallelism,
             );
 
-            match ksf_config {
-                Ok(v) => {
-                    if let Ok(result) =
-                        internal_finish_client_registration(types::FinishClientRegistrationParams {
-                            password: rust_password,
-                            registration_response: rust_registration_response,
-                            client_registration_state: rust_client_registration_state,
-                            identifiers,
-                            key_stretching_function_config: v,
-                        })
-                    {
-                        return types::into_result_handle(result);
-                    }
-
-                    types::into_result_handle(types::FinishClientRegistrationResult::default())
-                }
-                Err(_) => {
-                    types::into_result_handle(types::FinishClientRegistrationResult::default())
-                }
-            }
+            let result = ksf_config
+                .and_then(|ksf| {
+                    internal_finish_client_registration(types::FinishClientRegistrationParams {
+                        password: rust_password,
+                        registration_response: rust_registration_response,
+                        client_registration_state: rust_client_registration_state,
+                        identifiers,
+                        key_stretching_function_config: ksf,
+                    })
+                })
+                .unwrap_or_default();
+            types::into_result_handle(result)
         },
         std::ptr::null_mut(),
     )
@@ -538,11 +506,9 @@ pub extern "C" fn get_server_public_key(data: *mut c_char) -> *mut c_char {
     csharp::ffi_boundary(
         || {
             let secret = ffi_input!(data, std::ptr::null_mut());
-            if let Ok(public_key) = internal_get_server_public_key(&secret) {
-                return csharp::rust_string_to_csharp_string_handle(&public_key);
-            }
-
-            csharp::rust_string_to_csharp_string_handle("")
+            csharp::rust_string_to_csharp_string_handle(
+                &internal_get_server_public_key(&secret).unwrap_or_default(),
+            )
         },
         std::ptr::null_mut(),
     )
@@ -564,17 +530,14 @@ pub extern "C" fn create_server_registration_response(
             let rust_registration_request =
                 ffi_input!(csharp_registration_request, std::ptr::null_mut());
 
-            if let Ok(result) = internal_create_server_registration_response(
+            let response = internal_create_server_registration_response(
                 types::CreateServerRegistrationResponseParams {
                     server_setup: rust_server_setup,
                     user_identifier: String::clone(&rust_user_identifier),
                     registration_request: rust_registration_request,
                 },
-            ) {
-                return csharp::rust_string_to_csharp_string_handle(&result);
-            }
-
-            csharp::rust_string_to_csharp_string_handle("")
+            );
+            csharp::rust_string_to_csharp_string_handle(&response.unwrap_or_default())
         },
         std::ptr::null_mut(),
     )
@@ -622,13 +585,9 @@ pub extern "C" fn start_server_login_sealed(
                 identifiers,
             };
             let started = seal::unix_now()
-                .map_err(|_| Error::Ffi)
+                .map_err(|_| Error)
                 .and_then(|now| internal_start_server_login_sealed(params, now));
-            if let Ok(result) = started {
-                return types::into_result_handle(result);
-            }
-
-            types::into_result_handle(types::StartServerLoginResult::default())
+            types::into_result_handle(started.unwrap_or_default())
         },
         std::ptr::null_mut(),
     )
@@ -652,20 +611,16 @@ pub extern "C" fn finish_server_login_sealed(
             let rust_finish_login_request =
                 ffi_input!(csharp_finish_login_request, std::ptr::null_mut());
 
-            let Ok(now) = seal::unix_now() else {
-                return csharp::rust_string_to_csharp_string_handle("");
-            };
-            if let Ok(result) = internal_finish_server_login_sealed(
-                &rust_server_setup,
-                &rust_user_identifier,
-                &rust_sealed_state,
-                &rust_finish_login_request,
-                now,
-            ) {
-                return csharp::rust_string_to_csharp_string_handle(&result);
-            }
-
-            csharp::rust_string_to_csharp_string_handle("")
+            let session_key = seal::unix_now().map_err(|_| Error).and_then(|now| {
+                internal_finish_server_login_sealed(
+                    &rust_server_setup,
+                    &rust_user_identifier,
+                    &rust_sealed_state,
+                    &rust_finish_login_request,
+                    now,
+                )
+            });
+            csharp::rust_string_to_csharp_string_handle(&session_key.unwrap_or_default())
         },
         std::ptr::null_mut(),
     )
@@ -681,11 +636,9 @@ pub extern "C" fn start_client_login(
             if rust_password.len() > MAX_PASSWORD_LEN {
                 return std::ptr::null_mut();
             }
-            if let Ok(result) = internal_start_client_login(rust_password) {
-                return types::into_result_handle(result);
-            }
-
-            types::into_result_handle(types::StartClientLoginResult::default())
+            types::into_result_handle(
+                internal_start_client_login(rust_password).unwrap_or_default(),
+            )
         },
         std::ptr::null_mut(),
     )
@@ -725,24 +678,18 @@ pub extern "C" fn finish_client_login(
                 csharp_config_parallelism,
             );
 
-            match ksf_config {
-                Ok(v) => {
-                    if let Ok(result) =
-                        internal_finish_client_login(types::FinishClientLoginParams {
-                            client_login_state: rust_client_login_state,
-                            login_response: rust_login_response,
-                            password: rust_password,
-                            identifiers,
-                            key_stretching_function_config: v,
-                        })
-                    {
-                        return types::into_result_handle(result);
-                    }
-
-                    types::into_result_handle(types::FinishClientLoginResult::default())
-                }
-                Err(_) => types::into_result_handle(types::FinishClientLoginResult::default()),
-            }
+            let result = ksf_config
+                .and_then(|ksf| {
+                    internal_finish_client_login(types::FinishClientLoginParams {
+                        client_login_state: rust_client_login_state,
+                        login_response: rust_login_response,
+                        password: rust_password,
+                        identifiers,
+                        key_stretching_function_config: ksf,
+                    })
+                })
+                .unwrap_or_default();
+            types::into_result_handle(result)
         },
         std::ptr::null_mut(),
     )
@@ -758,11 +705,9 @@ pub extern "C" fn start_client_registration(
             if rust_password.len() > MAX_PASSWORD_LEN {
                 return std::ptr::null_mut();
             }
-            if let Ok(result) = internal_start_client_registration(rust_password) {
-                return types::into_result_handle(result);
-            }
-
-            types::into_result_handle(types::StartClientRegistrationResult::default())
+            types::into_result_handle(
+                internal_start_client_registration(rust_password).unwrap_or_default(),
+            )
         },
         std::ptr::null_mut(),
     )
@@ -941,7 +886,7 @@ mod tests {
         reg: &Registered,
         request: &str,
         record: Option<&str>,
-    ) -> JsResult<types::StartServerLoginResult> {
+    ) -> Result<types::StartServerLoginResult, Error> {
         internal_start_server_login_sealed(
             types::StartServerLoginParams {
                 server_setup: z(&reg.setup),
@@ -974,7 +919,7 @@ mod tests {
         reg: &Registered,
         state: &str,
         finalization: &str,
-    ) -> JsResult<Zeroizing<String>> {
+    ) -> Result<Zeroizing<String>, Error> {
         internal_finish_server_login_sealed(&reg.setup, USER, state, finalization, NOW)
     }
 

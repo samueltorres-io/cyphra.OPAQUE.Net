@@ -70,15 +70,6 @@ pub struct CustomIdentifiers {
     pub server: Option<String>,
 }
 
-impl CustomIdentifiers {
-    pub fn new(client_param: Option<String>, server_param: Option<String>) -> CustomIdentifiers {
-        CustomIdentifiers {
-            client: client_param,
-            server: server_param,
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct CustomKsf {
     pub argon: Argon2<'static>,
@@ -131,10 +122,6 @@ pub extern "C" fn get_start_server_login_response_response(
 
 #[no_mangle]
 pub extern "C" fn free_start_server_login_result(ptr: *mut StartServerLoginResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -160,10 +147,6 @@ pub extern "C" fn get_start_client_login_result_request(
 
 #[no_mangle]
 pub extern "C" fn free_start_client_login_result(ptr: *mut StartClientLoginResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -213,10 +196,6 @@ pub extern "C" fn get_finish_client_login_result_public_key(
 
 #[no_mangle]
 pub extern "C" fn free_finish_client_login_result(ptr: *mut FinishClientLoginResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -242,10 +221,6 @@ pub extern "C" fn get_start_client_registration_result_request(
 
 #[no_mangle]
 pub extern "C" fn free_start_client_registration_result(ptr: *mut StartClientRegistrationResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -287,10 +262,6 @@ pub extern "C" fn get_finish_client_registration_result_public_key(
 
 #[no_mangle]
 pub extern "C" fn free_finish_client_registration_result(ptr: *mut FinishClientRegistrationResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 

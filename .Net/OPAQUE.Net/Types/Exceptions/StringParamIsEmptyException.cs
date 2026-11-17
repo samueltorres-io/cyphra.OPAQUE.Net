@@ -3,21 +3,6 @@
     // An ArgumentException like every other argument check, so one catch covers them all.
     public class StringParamIsEmptyException : ArgumentException
     {
-        public const int MaximumPasswordLength = ParamGuard.MaximumPasswordLength;
-        public const int MaximumIdentifierLength = ParamGuard.MaximumIdentifierLength;
-        public const int MaximumProtocolMessageLength = ParamGuard.MaximumProtocolMessageLength;
         public StringParamIsEmptyException(string paramName) : base($"Parameter '{paramName}' can not be an empty string", paramName) { }
-
-        public static void ThrowIfEmpty(string value, string paramName)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                throw new StringParamIsEmptyException(paramName);
-            }
-        }
-
-        [Obsolete("Use the argument checks performed by the public API; kept for source compatibility. Throws ArgumentException or ArgumentOutOfRangeException, not this type.")]
-        public static void ThrowIfLongerThan(string? value, int maximumLength, string paramName) =>
-            ParamGuard.ThrowIfInvalid(value, maximumLength, paramName);
     }
 }

@@ -14,11 +14,16 @@ namespace OPAQUE.Net.Types.Exceptions
         /// Rejects what the native boundary would silently alter: embedded NUL (truncates the value),
         /// unpaired surrogates (replaced by U+FFFD) and anything over <paramref name="maximumBytes"/>
         /// UTF-8 bytes, the unit the native side enforces. No Unicode normalization is applied.
+        /// A <paramref name="required"/> value must also be non-empty.
         /// </summary>
-        public static void ThrowIfInvalid(string? value, int maximumBytes, string paramName)
+        public static void ThrowIfInvalid(string? value, int maximumBytes, string paramName, bool required = false)
         {
-            if (value is null)
+            if (string.IsNullOrEmpty(value))
             {
+                if (required)
+                {
+                    throw new StringParamIsEmptyException(paramName);
+                }
                 return;
             }
 

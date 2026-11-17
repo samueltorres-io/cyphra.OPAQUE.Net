@@ -9,8 +9,6 @@ namespace OPAQUE.Net
 {
     public class OpaqueServer
     {
-        public OpaqueServer() { }
-
         /// <summary>
         /// Creates the server setup
         /// </summary>
@@ -30,8 +28,7 @@ namespace OPAQUE.Net
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool GetPublicKey(string serverSetup, out string? publicKey)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
-            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup), required: true);
 
             byte[] setup = ParamGuard.ToNativeUtf8(serverSetup);
             try
@@ -55,12 +52,9 @@ namespace OPAQUE.Net
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool CreateRegistrationResponse(string serverSetup, string userIdentifier, string registrationRequest, out string? registrationResponse)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfEmpty(userIdentifier, nameof(userIdentifier));
-            StringParamIsEmptyException.ThrowIfEmpty(registrationRequest, nameof(registrationRequest));
-            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
-            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier));
-            ParamGuard.ThrowIfInvalid(registrationRequest, ParamGuard.MaximumProtocolMessageLength, nameof(registrationRequest));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup), required: true);
+            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier), required: true);
+            ParamGuard.ThrowIfInvalid(registrationRequest, ParamGuard.MaximumProtocolMessageLength, nameof(registrationRequest), required: true);
 
             byte[] setup = ParamGuard.ToNativeUtf8(serverSetup);
             try
@@ -115,12 +109,9 @@ namespace OPAQUE.Net
         public bool StartSealedLogin(string serverSetup, string startLoginRequest, string userIdentifier,
             string? registrationRecord, string? clientIdentity, string? serverIdentity, out StartSealedServerLoginResult? result, out Exception? e)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfEmpty(startLoginRequest, nameof(startLoginRequest));
-            StringParamIsEmptyException.ThrowIfEmpty(userIdentifier, nameof(userIdentifier));
-            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
-            ParamGuard.ThrowIfInvalid(startLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(startLoginRequest));
-            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup), required: true);
+            ParamGuard.ThrowIfInvalid(startLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(startLoginRequest), required: true);
+            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier), required: true);
             ParamGuard.ThrowIfInvalid(registrationRecord, ParamGuard.MaximumProtocolMessageLength, nameof(registrationRecord));
             ParamGuard.ThrowIfInvalid(clientIdentity, ParamGuard.MaximumIdentifierLength, nameof(clientIdentity));
             ParamGuard.ThrowIfInvalid(serverIdentity, ParamGuard.MaximumIdentifierLength, nameof(serverIdentity));
@@ -169,14 +160,10 @@ namespace OPAQUE.Net
         public bool FinishSealedLogin(string serverSetup, string userIdentifier, string sealedLoginState, string finishLoginRequest,
             Func<string, bool> tryConsume, out string? serverSessionKey)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfEmpty(userIdentifier, nameof(userIdentifier));
-            StringParamIsEmptyException.ThrowIfEmpty(sealedLoginState, nameof(sealedLoginState));
-            StringParamIsEmptyException.ThrowIfEmpty(finishLoginRequest, nameof(finishLoginRequest));
-            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
-            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier));
-            ParamGuard.ThrowIfInvalid(sealedLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(sealedLoginState));
-            ParamGuard.ThrowIfInvalid(finishLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(finishLoginRequest));
+            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup), required: true);
+            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier), required: true);
+            ParamGuard.ThrowIfInvalid(sealedLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(sealedLoginState), required: true);
+            ParamGuard.ThrowIfInvalid(finishLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(finishLoginRequest), required: true);
             ArgumentNullException.ThrowIfNull(tryConsume);
 
             byte[] setup = ParamGuard.ToNativeUtf8(serverSetup);

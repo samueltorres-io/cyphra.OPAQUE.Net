@@ -10,8 +10,6 @@ namespace OPAQUE.Net
 {
     public class OpaqueClient
     {
-        public OpaqueClient() { }
-
         /// <summary>
         /// Starts the registration process
         /// </summary>
@@ -20,8 +18,7 @@ namespace OPAQUE.Net
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool StartRegistration(string password, out StartClientRegistrationResult? result)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password), required: true);
 
             byte[] pw = ParamGuard.ToNativeUtf8(password);
             try
@@ -62,12 +59,9 @@ namespace OPAQUE.Net
         public bool FinishRegistration(string password, string registrationResponse, string clientRegistrationState, 
             string? clientIdentifier, string? serverIdentifier, KSFConfig? config, out FinishClientRegistrationResult? result)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            StringParamIsEmptyException.ThrowIfEmpty(registrationResponse, nameof(registrationResponse));
-            StringParamIsEmptyException.ThrowIfEmpty(clientRegistrationState, nameof(clientRegistrationState));
-            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
-            ParamGuard.ThrowIfInvalid(registrationResponse, ParamGuard.MaximumProtocolMessageLength, nameof(registrationResponse));
-            ParamGuard.ThrowIfInvalid(clientRegistrationState, ParamGuard.MaximumProtocolMessageLength, nameof(clientRegistrationState));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password), required: true);
+            ParamGuard.ThrowIfInvalid(registrationResponse, ParamGuard.MaximumProtocolMessageLength, nameof(registrationResponse), required: true);
+            ParamGuard.ThrowIfInvalid(clientRegistrationState, ParamGuard.MaximumProtocolMessageLength, nameof(clientRegistrationState), required: true);
             ParamGuard.ThrowIfInvalid(clientIdentifier, ParamGuard.MaximumIdentifierLength, nameof(clientIdentifier));
             ParamGuard.ThrowIfInvalid(serverIdentifier, ParamGuard.MaximumIdentifierLength, nameof(serverIdentifier));
 
@@ -95,8 +89,7 @@ namespace OPAQUE.Net
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool StartLogin(string password, out StartClientLoginResult? result)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password), required: true);
 
             byte[] pw = ParamGuard.ToNativeUtf8(password);
             try
@@ -137,12 +130,9 @@ namespace OPAQUE.Net
         public bool FinishLogin(string clientLoginState, string serverLoginResponse, string password, string? clientIdentifier, 
             string? serverIdentifier, KSFConfig? config, out FinishClientLoginResult? result)
         {
-            StringParamIsEmptyException.ThrowIfEmpty(clientLoginState, nameof(clientLoginState));
-            StringParamIsEmptyException.ThrowIfEmpty(serverLoginResponse, nameof(serverLoginResponse));
-            StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
-            ParamGuard.ThrowIfInvalid(clientLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(clientLoginState));
-            ParamGuard.ThrowIfInvalid(serverLoginResponse, ParamGuard.MaximumProtocolMessageLength, nameof(serverLoginResponse));
-            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
+            ParamGuard.ThrowIfInvalid(clientLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(clientLoginState), required: true);
+            ParamGuard.ThrowIfInvalid(serverLoginResponse, ParamGuard.MaximumProtocolMessageLength, nameof(serverLoginResponse), required: true);
+            ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password), required: true);
             ParamGuard.ThrowIfInvalid(clientIdentifier, ParamGuard.MaximumIdentifierLength, nameof(clientIdentifier));
             ParamGuard.ThrowIfInvalid(serverIdentifier, ParamGuard.MaximumIdentifierLength, nameof(serverIdentifier));
 

@@ -1,14 +1,14 @@
 ﻿using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using OPAQUE.Net.Types.Exceptions;
 using System.Text;
 
 namespace OPAQUE.Net.Types.Handles
 {
     internal sealed class StringHandle : BaseHandle<string>
     {
-        private const int MaximumNativeStringLength = 64 * 1024;
+        private const int MaximumNativeStringLength = ParamGuard.MaximumProtocolMessageLength;
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-        public StringHandle() : base() { }
 
         protected override void DoRelease()
         {
@@ -17,11 +17,6 @@ namespace OPAQUE.Net.Types.Handles
 
         protected override string GetValue()
         {
-            if (IsInvalid)
-            {
-                return string.Empty;
-            }
-
             // Same inclusive limit as the native side and ParamGuard: up to MaximumNativeStringLength bytes
             // before the NUL.
             int len = 0;

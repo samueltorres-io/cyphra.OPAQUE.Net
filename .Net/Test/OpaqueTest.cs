@@ -446,13 +446,13 @@ namespace Test
         public void OversizedInputsAreRejectedBeforeNativeInvocation()
         {
             OpaqueServer server = new OpaqueServer();
-            string huge = new string('A', StringParamIsEmptyException.MaximumProtocolMessageLength + 1);
-            string longId = new string('u', StringParamIsEmptyException.MaximumIdentifierLength + 1);
+            string huge = new string('A', ParamGuard.MaximumProtocolMessageLength + 1);
+            string longId = new string('u', ParamGuard.MaximumIdentifierLength + 1);
 
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.GetPublicKey(huge, out _));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartSealedLogin("a", "a", "u", null, longId, null, out _, out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', StringParamIsEmptyException.MaximumPasswordLength + 1), out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', ParamGuard.MaximumPasswordLength + 1), out _));
         }
   
         [TestMethod]

@@ -1,11 +1,8 @@
-using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace OPAQUE.Net.Helpers
 {
-    /// <remarks>Internal plumbing, not part of the supported API; it becomes internal in 2.0.</remarks>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static class FunctionHelper
+    internal static class FunctionHelper
     {
         /// <summary>
         /// Runs a native call, including reading its result, and maps protocol-level failure to <c>default</c>.
@@ -14,11 +11,7 @@ namespace OPAQUE.Net.Helpers
         /// like a wrong password. So are process-level faults (out of memory, stack exhaustion, a
         /// marshalling or native access fault).
         /// </summary>
-        public static T? TryExecute<T>(Func<T?> action)
-        {
-            try { return action.Invoke(); }
-            catch (Exception exception) when (!IsDeploymentFault(exception)) { return default; }
-        }
+        public static T? TryExecute<T>(Func<T?> action) => TryExecute(action, out _);
 
         /// <inheritdoc cref="TryExecute{T}(Func{T})"/>
         public static T? TryExecute<T>(Func<T?> action, out Exception? e)

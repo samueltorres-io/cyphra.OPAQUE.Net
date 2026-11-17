@@ -21,13 +21,10 @@ namespace OPAQUE.Net.Types.Handles
             }
         }
 
+        // SafeHandle never calls this for an invalid handle.
         protected override bool ReleaseHandle()
         {
-            if (!IsInvalid)
-            {
-                DoRelease();
-            }
-
+            DoRelease();
             return true;
         }
 
