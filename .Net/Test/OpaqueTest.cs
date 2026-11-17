@@ -315,29 +315,29 @@ namespace Test
         {
             OpaqueClient client = new OpaqueClient();
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.StartRegistration("", out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.StartRegistration("", out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.FinishRegistration("", "Value", "Value", null, null, null, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.FinishRegistration("Value", "", "Value", null, null, null, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.FinishRegistration("Value", "Value", "", null, null, null, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.FinishRegistration("", "Value", "Value", null, null, null, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.FinishRegistration("Value", "", "Value", null, null, null, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.FinishRegistration("Value", "Value", "", null, null, null, out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.StartLogin("", out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.StartLogin("", out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.FinishLogin("", "Value", "Value", null, null, null, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.FinishLogin("Value", "", "Value", null, null, null, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => client.FinishLogin("Value", "Value", "", null, null, null, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.FinishLogin("", "Value", "Value", null, null, null, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.FinishLogin("Value", "", "Value", null, null, null, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => client.FinishLogin("Value", "Value", "", null, null, null, out _));
         }
 
         [TestMethod]
         public void CustomKsfRejectsUnsafeParametersBeforeNativeInvocation()
         {
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
                 KSFConfig.Create(KSFConfigType.Custom, -1, 65536, 4));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
                 KSFConfig.Create(KSFConfigType.Custom, 1, 65535, 4));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
                 KSFConfig.Create(KSFConfigType.Custom, 1, 1048577, 4));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
                 KSFConfig.Create(KSFConfigType.Custom, 1, 65536, 17));
         }
 
@@ -346,15 +346,15 @@ namespace Test
         {
             OpaqueServer server = new OpaqueServer();
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.GetPublicKey("", out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.GetPublicKey("", out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("", "Value", "Value", out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("Value", "", "Value", out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("Value", "Value", "", out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("", "Value", "Value", out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("Value", "", "Value", out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("Value", "Value", "", out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartSealedLogin("", "Value", "Value", null, null, null, out _, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "", "Value", null, null, null, out _, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "Value", "", null, null, null, out _, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.StartSealedLogin("", "Value", "Value", null, null, null, out _, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "", "Value", null, null, null, out _, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "Value", "", null, null, null, out _, out _));
 
         }
 
@@ -376,10 +376,10 @@ namespace Test
         [TestMethod]
         public void DeploymentFaultsAreNotSwallowedButProtocolFaultsAre()
         {
-            Assert.ThrowsException<DllNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new DllNotFoundException()));
-            Assert.ThrowsException<EntryPointNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new EntryPointNotFoundException(), out _));
-            Assert.ThrowsException<BadImageFormatException>(() => FunctionHelper.TryExecute<string>(() => throw new BadImageFormatException()));
-            Assert.ThrowsException<OutOfMemoryException>(() => FunctionHelper.TryExecute<string>(() => throw new OutOfMemoryException(), out _));
+            Assert.ThrowsExactly<DllNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new DllNotFoundException()));
+            Assert.ThrowsExactly<EntryPointNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new EntryPointNotFoundException(), out _));
+            Assert.ThrowsExactly<BadImageFormatException>(() => FunctionHelper.TryExecute<string>(() => throw new BadImageFormatException()));
+            Assert.ThrowsExactly<OutOfMemoryException>(() => FunctionHelper.TryExecute<string>(() => throw new OutOfMemoryException(), out _));
 
             Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException()));
             Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException(), out Exception? e));
@@ -449,10 +449,10 @@ namespace Test
             string huge = new string('A', ParamGuard.MaximumProtocolMessageLength + 1);
             string longId = new string('u', ParamGuard.MaximumIdentifierLength + 1);
 
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.GetPublicKey(huge, out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartSealedLogin("a", "a", "u", null, longId, null, out _, out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', ParamGuard.MaximumPasswordLength + 1), out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => server.GetPublicKey(huge, out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => server.StartSealedLogin("a", "a", "u", null, longId, null, out _, out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', ParamGuard.MaximumPasswordLength + 1), out _));
         }
   
         [TestMethod]
@@ -462,10 +462,10 @@ namespace Test
             var server = new OpaqueServer();
             foreach (string bad in new[] { "abc\0TAIL", "\0", "pw\uD800", "\uDC00pw" })
             {
-                Assert.ThrowsException<ArgumentException>(() => client.StartRegistration(bad, out _));
-                Assert.ThrowsException<ArgumentException>(() => client.StartLogin(bad, out _));
-                Assert.ThrowsException<ArgumentException>(() => server.CreateRegistrationResponse("a", bad, "a", out _));
-                Assert.ThrowsException<ArgumentException>(() => server.StartSealedLogin("a", "a", "u", null, bad, null, out _, out _));
+                Assert.ThrowsExactly<ArgumentException>(() => client.StartRegistration(bad, out _));
+                Assert.ThrowsExactly<ArgumentException>(() => client.StartLogin(bad, out _));
+                Assert.ThrowsExactly<ArgumentException>(() => server.CreateRegistrationResponse("a", bad, "a", out _));
+                Assert.ThrowsExactly<ArgumentException>(() => server.StartSealedLogin("a", "a", "u", null, bad, null, out _, out _));
             }
         }
 
@@ -474,7 +474,7 @@ namespace Test
         {
             var client = new OpaqueClient();
             // 342 CJK chars = 1026 bytes: used to return a silent false.
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('\u4e2d', 342), out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('\u4e2d', 342), out _));
             Assert.IsTrue(client.StartRegistration(new string('\u4e2d', 341), out _));
         }
 
@@ -483,19 +483,19 @@ namespace Test
         {
             var client = new OpaqueClient();
             Assert.IsTrue(client.StartRegistration(new string('p', 1024), out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('p', 1025), out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('p', 1025), out _));
             // Valid surrogate pairs (4 bytes each) and NFD text are legitimate; 256 emoji = 1024 bytes.
             Assert.IsTrue(client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 256)), out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 257)), out _));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 257)), out _));
             Assert.IsTrue(client.StartRegistration("cafe\u0301", out _));
         }
 
         [TestMethod]
         public void RfcDraftProfileRequiresOptInAndInvalidEnumIsRejected()
         {
-            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.Create(KSFConfigType.RfcDraftRecommended));
-            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create((KSFConfigType)99));
+            Assert.ThrowsExactly<InvalidOperationException>(() => KSFConfig.Create(KSFConfigType.RfcDraftRecommended));
+            Assert.ThrowsExactly<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create((KSFConfigType)99));
         }
 
         [TestMethod]
@@ -588,7 +588,7 @@ namespace Test
             SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
             string? key = "x";
 
-            Assert.ThrowsException<InvalidOperationException>(() =>
+            Assert.ThrowsExactly<InvalidOperationException>(() =>
                 new OpaqueServer().FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, _ => throw new InvalidOperationException(), out key));
             Assert.IsNull(key);
         }
@@ -633,11 +633,11 @@ namespace Test
         public void SealedLoginValidatesArguments()
         {
             var s = new OpaqueServer();
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("", User, "a", "a", _ => true, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", User, "", "a", _ => true, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", User, "a", "", _ => true, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "", "a", "a", _ => true, out _));
-            Assert.ThrowsException<ArgumentException>(() => s.StartSealedLogin("a", "a", "u\0x", null, out _, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => s.FinishSealedLogin("", User, "a", "a", _ => true, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", User, "", "a", _ => true, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", User, "a", "", _ => true, out _));
+            Assert.ThrowsExactly<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "", "a", "a", _ => true, out _));
+            Assert.ThrowsExactly<ArgumentException>(() => s.StartSealedLogin("a", "a", "u\0x", null, out _, out _));
             Assert.IsFalse(s.FinishSealedLogin("a", User, "a", "a", _ => true, out _));
         }
 
@@ -667,8 +667,8 @@ namespace Test
         public void ReplayCacheAdmitsEachIdOnceEvenUnderContention()
         {
             var cache = new LoginStateReplayCache();
-            Assert.ThrowsException<ArgumentException>(() => cache.TryConsume(""));
-            Assert.ThrowsException<ArgumentNullException>(() => cache.TryConsume(null!));
+            Assert.ThrowsExactly<ArgumentException>(() => cache.TryConsume(""));
+            Assert.ThrowsExactly<ArgumentNullException>(() => cache.TryConsume(null!));
 
             Assert.IsTrue(cache.TryConsume("a"));
             Assert.IsTrue(cache.TryConsume("b"));
@@ -736,14 +736,14 @@ namespace Test
             Assert.AreEqual(1, (int)KSFConfigType.MemoryConstrained);
             Assert.AreEqual(2, (int)KSFConfigType.Custom);
 
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MinimumIterations - 1, KSFConfig.MinimumMemoryKiB, 1));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB - 1, 1));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism - 1));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MaximumParallelism + 1));
-            Assert.ThrowsException<ArgumentException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, null));
-            Assert.ThrowsException<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MinimumIterations - 1, KSFConfig.MinimumMemoryKiB, 1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB - 1, 1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism - 1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, KSFConfig.MaximumParallelism + 1));
+            Assert.ThrowsExactly<ArgumentException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MinimumMemoryKiB, null));
+            Assert.ThrowsExactly<InvalidOperationException>(() => KSFConfig.CreateRfcDraftRecommended(false));
         }
 
         [TestMethod]
@@ -773,11 +773,11 @@ namespace Test
             {
                 File.WriteAllText(Path.Combine(broken, NativeLibraryResolver.FileName()), "not a library");
 
-                var missing = Assert.ThrowsException<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty }));
+                var missing = Assert.ThrowsExactly<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty }));
                 StringAssert.Contains(missing.Message, empty);
                 StringAssert.Contains(missing.Message, System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier);
 
-                var unloadable = Assert.ThrowsException<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty, broken }));
+                var unloadable = Assert.ThrowsExactly<DllNotFoundException>(() => NativeLibraryResolver.Load(NativeLibraryResolver.FileName(), new[] { empty, broken }));
                 StringAssert.Contains(unloadable.Message, "could not be loaded");
                 StringAssert.Contains(unloadable.Message, broken);
             }
