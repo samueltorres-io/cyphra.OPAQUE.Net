@@ -77,7 +77,7 @@ namespace OPAQUE.Net
             try
             {
                 result = FunctionHelper.TryExecute(() => finish_client_registration(pw, registrationResponse,
-                    clientRegistrationState, clientIdentifier ?? "", serverIdentifier ?? "", config.TypeString, config.Iterations, config.Memory, config.Parallelism)?.GetAndRelease());
+                    clientRegistrationState, clientIdentifier ?? "", serverIdentifier ?? "", (int)config.Type, (uint)(config.Iterations ?? 0), (uint)(config.Memory ?? 0), (uint)(config.Parallelism ?? 0))?.GetAndRelease());
             }
             finally
             {
@@ -152,7 +152,7 @@ namespace OPAQUE.Net
             try
             {
                 result = FunctionHelper.TryExecute(() => finish_client_login(clientLoginState, serverLoginResponse,
-                    pw, clientIdentifier ?? "", serverIdentifier ?? "", config.TypeString, config.Iterations, config.Memory, config.Parallelism)?.GetAndRelease());
+                    pw, clientIdentifier ?? "", serverIdentifier ?? "", (int)config.Type, (uint)(config.Iterations ?? 0), (uint)(config.Memory ?? 0), (uint)(config.Parallelism ?? 0))?.GetAndRelease());
             }
             finally
             {
@@ -167,13 +167,13 @@ namespace OPAQUE.Net
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern FinishClientRegistrationResultHandle finish_client_registration(byte[] password, [MarshalAs(UnmanagedType.LPUTF8Str)] string registrationResponse,
-            [MarshalAs(UnmanagedType.LPUTF8Str)] string clientRegistrationState, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string clientRegistrationState, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, int configType, uint iterations, uint memory, uint parallelism);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StartClientLoginResultHandle start_client_login(byte[] password);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern FinishClientLoginResultHandle finish_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string clientLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginResponse, byte[] password,
-            [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, int configType, uint iterations, uint memory, uint parallelism);
     }
 }

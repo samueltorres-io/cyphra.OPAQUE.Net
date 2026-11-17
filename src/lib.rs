@@ -213,39 +213,22 @@ fn try_create_identifiers(
     )))
 }
 
+/// Maps the managed `KSFConfigType` (0 = RFC draft, 1 = memory constrained, 2 = custom); the cost
+/// parameters are read only for the custom profile and are range-checked in `get_custom_ksf`.
 fn try_create_ksf_config(
-    csharp_config_type: *mut c_char,
-    csharp_config_iterations: *mut c_char,
-    csharp_config_memory: *mut c_char,
-    csharp_config_parallelism: *mut c_char,
+    kind: i32,
+    iterations: u32,
+    memory: u32,
+    parallelism: u32,
 ) -> Result<types::KeyStretchingFunctionConfig, Error> {
-    let ksf_config_type = ffi_string(csharp_config_type)?;
-
-    match ksf_config_type.as_str() {
-        "rfcDraftRecommended" => Ok(types::KeyStretchingFunctionConfig::RfcDraftRecommended),
-        "memoryConstrained" => Ok(types::KeyStretchingFunctionConfig::MemoryConstrained),
-        "custom" => {
-            let iterations = ffi_string(csharp_config_iterations)?;
-            if iterations.is_empty() {
-                return Err(Error::InvalidKsf);
-            }
-
-            let memory = ffi_string(csharp_config_memory)?;
-            if memory.is_empty() {
-                return Err(Error::InvalidKsf);
-            }
-
-            let parallelism = ffi_string(csharp_config_parallelism)?;
-            if parallelism.is_empty() {
-                return Err(Error::InvalidKsf);
-            }
-
-            Ok(types::KeyStretchingFunctionConfig::Custom {
-                iterations: iterations.parse().map_err(|_| Error::InvalidKsf)?,
-                memory: memory.parse().map_err(|_| Error::InvalidKsf)?,
-                parallelism: parallelism.parse().map_err(|_| Error::InvalidKsf)?,
-            })
-        }
+    match kind {
+        0 => Ok(types::KeyStretchingFunctionConfig::RfcDraftRecommended),
+        1 => Ok(types::KeyStretchingFunctionConfig::MemoryConstrained),
+        2 => Ok(types::KeyStretchingFunctionConfig::Custom {
+            iterations,
+            memory,
+            parallelism,
+        }),
         _ => Err(Error::InvalidKsf),
     }
 }
@@ -489,10 +472,10 @@ pub extern "C" fn finish_client_registration(
     csharp_client_registration_state: *mut c_char,
     csharp_client_identifier: *mut c_char,
     csharp_server_identifier: *mut c_char,
-    csharp_config_type: *mut c_char,
-    csharp_config_iterations: *mut c_char,
-    csharp_config_memory: *mut c_char,
-    csharp_config_parallelism: *mut c_char,
+    csharp_config_type: i32,
+    csharp_config_iterations: u32,
+    csharp_config_memory: u32,
+    csharp_config_parallelism: u32,
 ) -> *mut types::FinishClientRegistrationResult {
     csharp::ffi_boundary(
         || {
@@ -715,10 +698,10 @@ pub extern "C" fn finish_client_login(
     csharp_password: *mut c_char,
     csharp_client_identifier: *mut c_char,
     csharp_server_identifier: *mut c_char,
-    csharp_config_type: *mut c_char,
-    csharp_config_iterations: *mut c_char,
-    csharp_config_memory: *mut c_char,
-    csharp_config_parallelism: *mut c_char,
+    csharp_config_type: i32,
+    csharp_config_iterations: u32,
+    csharp_config_memory: u32,
+    csharp_config_parallelism: u32,
 ) -> *mut types::FinishClientLoginResult {
     csharp::ffi_boundary(
         || {
@@ -851,17 +834,11 @@ mod tests {
         assert_eq!(rfc.argon.params().p_cost(), 4);
         assert!(get_custom_ksf(types::KeyStretchingFunctionConfig::MemoryConstrained).is_ok());
 
-        let c = |s: &str| CString::new(s).unwrap();
-        let (kind, empty) = (c("bogus"), c(""));
-        let (p0, p1, p2) = (
-            empty.as_ptr() as *mut c_char,
-            empty.as_ptr() as *mut c_char,
-            empty.as_ptr() as *mut c_char,
-        );
-        assert!(try_create_ksf_config(kind.as_ptr() as *mut c_char, p0, p1, p2).is_err());
-        // "custom" with a missing value must not fall back to a default.
-        let custom = c("custom");
-        assert!(try_create_ksf_config(custom.as_ptr() as *mut c_char, p0, p1, p2).is_err());
+        assert!(try_create_ksf_config(3, 0, 0, 0).is_err());
+        assert!(try_create_ksf_config(-1, 0, 0, 0).is_err());
+        // "custom" without values must not fall back to a default: zeros fail the range check.
+        let custom = try_create_ksf_config(2, 0, 0, 0).ok().unwrap();
+        assert!(get_custom_ksf(custom).is_err());
     }
 
     #[test]
@@ -884,23 +861,6 @@ mod tests {
         let too_long = c(&"x".repeat(MAX_IDENTIFIER_LEN + 1));
         assert!(ids(&too_long, &empty).is_err());
         assert!(ids(&empty, &too_long).is_err());
-    }
-
-    #[test]
-    fn rejects_non_numeric_ffi_ksf_parameters() {
-        let kind = CString::new("custom").expect("static test input is valid");
-        let iterations = CString::new("not-a-number").expect("static test input is valid");
-        let memory =
-            CString::new(MIN_CUSTOM_MEMORY_KIB.to_string()).expect("numeric input is valid");
-        let parallelism = CString::new("1").expect("static test input is valid");
-
-        assert!(try_create_ksf_config(
-            kind.as_ptr() as *mut c_char,
-            iterations.as_ptr() as *mut c_char,
-            memory.as_ptr() as *mut c_char,
-            parallelism.as_ptr() as *mut c_char,
-        )
-        .is_err());
     }
 
     #[test]
@@ -1200,13 +1160,8 @@ mod tests {
         assert!(create_server_registration_response(null, null, null).is_null());
         assert!(start_server_login_sealed(null, null, null, null, null, null).is_null());
         assert!(finish_server_login_sealed(null, null, null, null).is_null());
-        assert!(
-            finish_client_login(null, null, null, null, null, null, null, null, null).is_null()
-        );
-        assert!(
-            finish_client_registration(null, null, null, null, null, null, null, null, null)
-                .is_null()
-        );
+        assert!(finish_client_login(null, null, null, null, null, 0, 0, 0, 0).is_null());
+        assert!(finish_client_registration(null, null, null, null, null, 0, 0, 0, 0).is_null());
     }
 
     #[test]

@@ -721,12 +721,20 @@ namespace Test
         [TestMethod]
         public void KsfConfigAcceptsBoundsAndRejectsEverythingOutside()
         {
-            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
-                KSFConfig.MinimumIterations, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism).TypeString);
-            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
-                KSFConfig.MaximumIterations, KSFConfig.MaximumCustomMemoryKiB, KSFConfig.MaximumParallelism).TypeString);
-            Assert.AreEqual("memoryConstrained", KSFConfig.Create(KSFConfigType.MemoryConstrained).TypeString);
-            Assert.AreEqual("rfcDraftRecommended", KSFConfig.CreateRfcDraftRecommended(true).TypeString);
+            KSFConfig min = KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MinimumIterations, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism);
+            Assert.AreEqual(KSFConfigType.Custom, min.Type);
+            Assert.AreEqual(KSFConfig.MinimumMemoryKiB, min.Memory);
+            Assert.AreEqual(KSFConfigType.Custom, KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MaximumIterations, KSFConfig.MaximumCustomMemoryKiB, KSFConfig.MaximumParallelism).Type);
+            KSFConfig named = KSFConfig.Create(KSFConfigType.MemoryConstrained);
+            Assert.AreEqual(KSFConfigType.MemoryConstrained, named.Type);
+            Assert.IsNull(named.Iterations);
+            Assert.AreEqual(KSFConfigType.RfcDraftRecommended, KSFConfig.CreateRfcDraftRecommended(true).Type);
+            // The native side maps these exact values.
+            Assert.AreEqual(0, (int)KSFConfigType.RfcDraftRecommended);
+            Assert.AreEqual(1, (int)KSFConfigType.MemoryConstrained);
+            Assert.AreEqual(2, (int)KSFConfigType.Custom);
 
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));

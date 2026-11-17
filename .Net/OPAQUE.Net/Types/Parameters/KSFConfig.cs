@@ -10,26 +10,12 @@
         public const int MaximumParallelism = 16;
         public KSFConfigType Type { get; private set; } = KSFConfigType.MemoryConstrained;
 
-        public string Iterations { get; private set; } = string.Empty;
-        public string Memory { get; private set; } = string.Empty;
-        public string Parallelism { get; private set; } = string.Empty;
-
-        public string TypeString 
-        { 
-            get
-            {
-                switch (Type)
-                {
-                    case KSFConfigType.RfcDraftRecommended:
-                        return "rfcDraftRecommended";
-                    case KSFConfigType.Custom:
-                        return "custom";
-                    case KSFConfigType.MemoryConstrained:
-                    default:
-                        return "memoryConstrained";
-                }
-            }
-        }
+        /// <summary>Argon2id iterations; set only for <see cref="KSFConfigType.Custom"/>.</summary>
+        public int? Iterations { get; private set; }
+        /// <summary>Argon2id memory in KiB; set only for <see cref="KSFConfigType.Custom"/>.</summary>
+        public int? Memory { get; private set; }
+        /// <summary>Argon2id lanes; set only for <see cref="KSFConfigType.Custom"/>.</summary>
+        public int? Parallelism { get; private set; }
 
         protected KSFConfig() { }
 
@@ -76,9 +62,9 @@
                 return new KSFConfig()
                 {
                     Type = type,
-                    Iterations = iterations.Value.ToString(),
-                    Memory = memory.Value.ToString(),
-                    Parallelism = parallelism.Value.ToString()
+                    Iterations = iterations,
+                    Memory = memory,
+                    Parallelism = parallelism
                 };
             }
 
@@ -89,10 +75,11 @@
         }
     }
 
+    // The numeric values cross the native boundary: do not reorder.
     public enum KSFConfigType
     {
-        RfcDraftRecommended,
-        MemoryConstrained,
-        Custom
+        RfcDraftRecommended = 0,
+        MemoryConstrained = 1,
+        Custom = 2
     }
 }
