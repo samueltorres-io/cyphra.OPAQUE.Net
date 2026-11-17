@@ -52,7 +52,7 @@ string exportKey = finish.ExportKey;
 string serverStaticPublicKey = finish.ServerStaticPublicKey;
 ```
 
-Only `registrationRecord` is required by the server for later login. The export key is client-side material and should be handled as a secret. `FinishClientRegistrationResult` also keeps the misspelled `ServerStaicPublicKey` as an `[Obsolete]` alias of `ServerStaticPublicKey`; use the correctly spelled property.
+Only `registrationRecord` is required by the server for later login. The export key is client-side material and should be handled as a secret.
 
 ## Login
 
@@ -83,11 +83,12 @@ if (!client.FinishLogin(
 
 // Only LoginResponse goes to the client. SealedLoginState is encrypted, tamper-proof and expires
 // after two minutes, so any server-side store works (cache, database), on any instance sharing the setup.
-// Use the tryConsume overload so a state cannot be finished twice: LoginStateReplayCache (create one per
-// process) for a single instance, or shared atomic storage (e.g. Redis SET NX) for several.
-var replayCache = new LoginStateReplayCache();
+// The state only finishes for the userIdentifier it was started with, and only once: replayCache is one
+// process-wide LoginStateReplayCache for a single instance (e.g. a static field or a DI singleton, never a
+// new one per request), or shared atomic storage (e.g. Redis SET NX) for several.
 if (!server.FinishSealedLogin(
     serverSetup,
+    userIdentifier,
     serverStart.SealedLoginState,
     clientFinish.FinishLoginRequest,
     replayCache.TryConsume,

@@ -14,11 +14,16 @@ namespace OPAQUE.Net.Types.Exceptions
         /// Rejects what the native boundary would silently alter: embedded NUL (truncates the value),
         /// unpaired surrogates (replaced by U+FFFD) and anything over <paramref name="maximumBytes"/>
         /// UTF-8 bytes, the unit the native side enforces. No Unicode normalization is applied.
+        /// A <paramref name="required"/> value must also be non-empty.
         /// </summary>
-        public static void ThrowIfInvalid(string? value, int maximumBytes, string paramName)
+        public static void ThrowIfInvalid(string? value, int maximumBytes, string paramName, bool required = false)
         {
-            if (value is null)
+            if (string.IsNullOrEmpty(value))
             {
+                if (required)
+                {
+                    throw new StringParamIsEmptyException(paramName);
+                }
                 return;
             }
 
@@ -47,6 +52,17 @@ namespace OPAQUE.Net.Types.Exceptions
             {
                 throw TooLong(paramName, maximumBytes);
             }
+        }
+
+        /// <summary>
+        /// NUL-terminated UTF-8 for a secret argument. A <c>byte[]</c> parameter is pinned and passed as is, so
+        /// unlike <c>LPUTF8Str</c> no unmanaged copy is left unwiped: zero the array after the call.
+        /// </summary>
+        public static byte[] ToNativeUtf8(string value)
+        {
+            byte[] bytes = new byte[StrictUtf8.GetByteCount(value) + 1];
+            StrictUtf8.GetBytes(value, bytes);
+            return bytes;
         }
 
         private static ArgumentOutOfRangeException TooLong(string paramName, int maximumBytes) =>

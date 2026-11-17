@@ -12,6 +12,9 @@ updates:
     target-branch: develop
     schedule:
       interval: weekly
+    # Let a fresh release age a week before it is proposed, so a compromised publish is likelier caught.
+    cooldown:
+      default-days: 7
     # One PR per week for the safe updates instead of one per crate. Majors stay separate PRs.
     groups:
       rust-minor-patch:
@@ -25,8 +28,19 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: generic-array
         update-types: ["version-update:semver-major"]
+  # Both project directories: the test project's packages run in the job that builds the shipped binary.
   - package-ecosystem: nuget
-    directory: /.Net
+    directories:
+      - /.Net/OPAQUE.Net
+      - /.Net/Test
+    target-branch: develop
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+  # zig and cargo-zigbuild (hash-pinned wheels) link the shipped Linux binaries.
+  - package-ecosystem: pip
+    directory: /.github
     target-branch: develop
     schedule:
       interval: weekly

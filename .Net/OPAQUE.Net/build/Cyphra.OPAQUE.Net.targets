@@ -2,10 +2,11 @@
   <!--
     The package ships native libraries for linux-x64/arm64 (glibc), win-x64/arm64 and osx-x64/arm64 only.
     Other RIDs would restore without a matching binary (or with a glibc one on musl) and fail at run time.
+    Allow-list, not a deny-list: distro and versioned RIDs (ubuntu.22.04-x64, win10-x64, ...) have no asset either.
   -->
   <Target Name="OpaqueWarnUnsupportedRuntimeIdentifier" BeforeTargets="ResolvePackageAssets" Condition="'$(RuntimeIdentifier)' != ''">
     <PropertyGroup>
-      <_OpaqueRidUnsupported Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', 'musl|bionic|android|ios|tvos|maccatalyst|browser|wasi|freebsd|illumos|solaris|haiku')) Or !$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '-(x64|arm64)$'))">true</_OpaqueRidUnsupported>
+      <_OpaqueRidUnsupported Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^(linux|win|osx)-(x64|arm64)$'))">true</_OpaqueRidUnsupported>
     </PropertyGroup>
     <Warning Condition="'$(_OpaqueRidUnsupported)' == 'true'"
              Code="OPAQUE001"

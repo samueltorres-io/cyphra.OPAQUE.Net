@@ -10,9 +10,12 @@ permissions: {}
 
 jobs:
   from_develop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
+      # A fork can name its branch develop too: require this repository's own develop.
       - env:
           HEAD: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
         run: |
-          [ "$HEAD" = "develop" ] || { echo "::error::PRs into main must come from develop, got '$HEAD'"; exit 1; }
+          [ "$HEAD" = "develop" ] && [ "$HEAD_REPO" = "$REPO" ] || { echo "::error::PRs into main must come from $REPO:develop, got '$HEAD_REPO:$HEAD'"; exit 1; }

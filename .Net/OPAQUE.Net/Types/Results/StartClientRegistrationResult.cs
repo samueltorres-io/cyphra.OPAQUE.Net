@@ -10,5 +10,8 @@
             ClientRegistrationState = clientRegistrationState;
             RegistrationRequest = registrationRequest;
         }
+
+        // Redacted: the properties hold secrets or flow state that must not end up in logs.
+        public override string ToString() => nameof(StartClientRegistrationResult);
     }
 }
