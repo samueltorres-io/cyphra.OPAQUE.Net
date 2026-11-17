@@ -6,7 +6,8 @@
 # run inside the same workflow run, so the artifacts uploaded here are downloadable by the caller.
 #
 # Deliberately uses only first-party actions/* (pinned by commit SHA) plus rustup, preinstalled on GitHub runners.
-# Release builds (called from publish.yaml) restore no cache, so nothing cached can end up in the package.
+# No build cache: it was restored after the compile steps and keyed per PR branch, so it never saved
+# time, and without it nothing cached can end up in the package.
 
 name: Build and test
 
@@ -30,8 +31,8 @@ permissions:
 jobs:
   # Separate job on purpose: `cargo install` cannot be checksum-pinned and runs build scripts, so it
   # must not share a runner with the jobs whose output is packed. Still gates releases, because
-  # publish.yaml needs this whole workflow to pass. Fails on known-vulnerable dependencies; warnings
-  # such as unsound/unmaintained advisories do not fail it. Ignores live in .cargo/audit.toml.
+  # publish.yaml needs this whole workflow to pass. Fails on known-vulnerable, unsound or yanked
+  # dependencies; unmaintained advisories only warn. Ignores live in .cargo/audit.toml.
   audit:
     name: Audit dependencies
     runs-on: ubuntu-latest
@@ -39,11 +40,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false # nothing here pushes; keep the token out of .git/config
 
       - name: Audit Cargo.lock
         run: |
           cargo +stable install --locked cargo-audit --version 0.22.2
-          cargo audit
+          cargo audit --deny unsound --deny yanked
 
   build_and_test:
     name: Build and test (${{ matrix.rid }})
@@ -109,6 +112,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false # nothing here pushes; keep the token out of .git/config
 
       # rustup ships in every GitHub-hosted image used here (including windows-11-arm). Fail loudly
       # instead of fetching and executing an installer from the network.
@@ -129,19 +134,6 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets --all-features --locked -- -D warnings
           cargo test --all-features --locked
-
-      - name: Cache cargo registry and build directory
-        if: github.event_name != 'release'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target/${{ matrix.target }}
-          key: cargo-${{ matrix.rid }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: |
-            cargo-${{ matrix.rid }}-
 
       # Zig acts as the cross-linker and carries its own glibc stubs, which is what makes an
       # explicit glibc floor possible. Both zig and cargo-zigbuild come from hash-pinned PyPI
@@ -170,9 +162,8 @@ jobs:
             cargo build --release --locked --target "${{ matrix.target }}"
           fi
 
-      # Cheap guard against a silently mis-targeted build. A wrong-architecture library would not
-      # fail the tests loudly either: FunctionHelper.TryExecute swallows the load failure and the
-      # API just returns false.
+      # Cheap guard against a silently mis-targeted build, caught here before the tests run instead of
+      # as a BadImageFormatException from every test.
       - name: Verify the built library's architecture
         run: |
           set -euo pipefail
@@ -206,6 +197,19 @@ jobs:
 
       # The whole point of building Linux through zigbuild is the glibc floor, so assert it rather
       # than trust it. A silently raised floor would only surface as install failures downstream.
+      # crt-static (.cargo/config.toml): no dependency the loader would search for next to the app.
+      - name: Verify the Windows DLL imports
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Select-Object -First 1
+          $imports = & $dumpbin.FullName /dependents "target/${{ matrix.target }}/release/${{ matrix.cargo_out }}" | Select-String '\.dll' | ForEach-Object { $_.Line.Trim() } | Where-Object { $_ -notmatch '^Dump of' }
+          $imports
+          $bad = $imports | Where-Object { $_ -notmatch '^(KERNEL32|ntdll|bcrypt|ADVAPI32|USER32|WS2_32|api-ms-win-.*)\.dll$' }
+          if ($bad) { Write-Error "Unexpected DLL imports: $bad"; exit 1 }
+
       - name: Verify the glibc floor
         if: matrix.zig_target != ''
         run: |
@@ -235,6 +239,17 @@ jobs:
              ".Net/OPAQUE.Net/${{ matrix.staged }}"
           ls -l ".Net/OPAQUE.Net/${{ matrix.staged }}"
 
+      # Upload before any NuGet restore or test code runs on this runner, so nothing they execute can
+      # touch the binary that gets packed. A failing test still fails the workflow, and publish.yaml
+      # needs the whole workflow to pass.
+      - name: Upload native library
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: .Net/OPAQUE.Net/${{ matrix.staged }}
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
@@ -259,13 +274,6 @@ jobs:
       - name: Test
         run: dotnet test .Net/OPAQUE.Net/OPAQUE.Net.sln --configuration Release --no-build
 
-      - name: Upload native library
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: native-${{ matrix.rid }}
-          path: .Net/OPAQUE.Net/${{ matrix.staged }}
-          if-no-files-found: error
-          retention-days: 7
 
   # Packs the six freshly built libraries exactly as the release does and checks the package layout,
   # so a pack that silently loses a platform fails here instead of when the release is cut. Skipped on
@@ -279,6 +287,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false # nothing here pushes; keep the token out of .git/config
 
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
