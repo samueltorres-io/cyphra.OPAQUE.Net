@@ -47,7 +47,7 @@ Para o fluxo completo de registro e login, resultados, identificadores, parâmet
 
 O pacote tem como alvo .NET 8 e .NET 10 e inclui bibliotecas nativas para Windows, Linux e macOS, nas arquiteturas x64 e arm64.
 
-A biblioteca nativa correta é escolhida pelo runtime identifier do .NET. No Linux há suporte apenas a glibc: Alpine/musl (`linux-musl-*`) e outros identificadores como `win-x86` ou `linux-arm` não têm biblioteca nativa, e compilar para eles emite o aviso `OPAQUE001`. Veja [plataformas e builds](docs/building.md).
+A biblioteca nativa correta é escolhida pelo runtime identifier do .NET. No Linux há suporte apenas a glibc: Alpine/musl (`linux-musl-*`) e outros identificadores como `win-x86` ou `linux-arm` não têm biblioteca nativa, e compilar para eles emite o aviso `OPAQUE001`. Veja [plataformas suportadas](docs/guide/platforms.md).
 
 A biblioteca nativa é carregada somente dos diretórios que o host .NET resolveu para a aplicação (os assets `runtimes/<rid>/native` e os diretórios da aplicação e do assembly). Uma biblioteca ausente ou que não carrega lança `DllNotFoundException` listando os diretórios verificados; o caminho de busca do sistema operacional (`LD_LIBRARY_PATH`, `PATH`, diretório atual) nunca é consultado.
 
@@ -62,7 +62,7 @@ Este é um fork de segurança mantido ativamente. Mudanças que afetam criptogra
 ## Contribuição e segurança
 
 - Leia [`CONTRIBUTING.md`](CONTRIBUTING.md) antes de abrir um pull request.
-- Reporte vulnerabilidades de forma privada conforme [`docs/security.md`](docs/security.md).
+- Reporte vulnerabilidades de forma privada conforme [política de segurança](docs/security/policy.md).
 - A documentação técnica está disponível em [`docs/`](docs/README.pt-BR.md).
 
 ## Licença

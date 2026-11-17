@@ -7,7 +7,7 @@
 #   <artifacts-dir>  where the native-<rid> artifacts were downloaded (one subdirectory per RID)
 #   <out-dir>        where the .nupkg is written
 #   [version]        overrides the csproj <Version> (the release passes the tag's version)
-# Must run in GitHub Actions: the csproj refuses to pack anywhere else (see docs/building.md).
+# Must run in GitHub Actions: the csproj refuses to pack anywhere else (see docs/development/releasing.md).
 set -euo pipefail
 
 artifacts=${1:?artifacts dir}

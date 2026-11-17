@@ -50,7 +50,7 @@ For the complete registration and login sequence, result handling, identifiers, 
 
 The package targets .NET 8 and .NET 10 and includes native binaries for Windows, Linux, and macOS on x64 and arm64.
 
-The correct native library is selected by the .NET runtime identifier. Linux support is glibc only: Alpine/musl (`linux-musl-*`) and other runtime identifiers such as `win-x86` or `linux-arm` have no native library, and building for them emits warning `OPAQUE001`. See [supported platforms and builds](docs/building.md) for details.
+The correct native library is selected by the .NET runtime identifier. Linux support is glibc only: Alpine/musl (`linux-musl-*`) and other runtime identifiers such as `win-x86` or `linux-arm` have no native library, and building for them emits warning `OPAQUE001`. See [supported platforms](docs/guide/platforms.md) for details.
 
 The native library is loaded only from the directories the .NET host resolved for your application (the `runtimes/<rid>/native` assets, the application and assembly directories). A missing or unloadable library throws `DllNotFoundException` listing the probed directories; the operating-system search path (`LD_LIBRARY_PATH`, `PATH`, working directory) is never consulted.
 
@@ -65,7 +65,7 @@ This is an actively maintained security-focused fork. Changes that affect crypto
 ## Contributing and security
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-- Report vulnerabilities privately according to [docs/security.md](docs/security.md).
+- Report vulnerabilities privately according to [the security policy](docs/security/policy.md).
 - Documentation is also available in [Portuguese](README.pt-BR.md).
 
 ## License

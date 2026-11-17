@@ -31,7 +31,7 @@ namespace OPAQUE.Net.Types.Handles
             }
 
             // The buffer may hold a session or export key: wipe this intermediate copy. The returned
-            // string is immutable and cannot be wiped (see docs/security.md).
+            // string is immutable and cannot be wiped (see docs/security/secure-use.md).
             byte[] buffer = new byte[len];
             try
             {
