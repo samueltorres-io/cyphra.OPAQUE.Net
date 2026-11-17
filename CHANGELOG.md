@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking: sealed login states are bound to the user identifier.** `StartSealedLogin` authenticates `userIdentifier` together with the sealed state (seal format version 2; version 1 states in flight at upgrade fail once). Finish with the new `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)`, which fails for any other user and is always single-use. The two overloads without `userIdentifier` are `[Obsolete(error: true)]` and throw `NotSupportedException`: they let a valid state and finish message of one account complete a login presented for another account, and the four-argument one was replayable for two minutes. The native `finish_server_login_sealed` export takes the identifier as its second argument.
+
 ## 1.6.0
 
 - **Native dependencies bumped:** `argon2` 0.6, `hkdf` 0.13 (with `sha2` 0.11, which it requires), `chacha20poly1305` 0.11, `base64` 0.23, `libc`, `zeroize`, plus a full `Cargo.lock` refresh. Argon2id, HKDF-SHA512 and XChaCha20-Poly1305 outputs are byte-identical to the previous versions (checked with fixed vectors), so existing registrations and sealed states stay valid. `generic-array` stays on 0.14: opaque-ke 3.0's `Ksf` trait is defined over it, and 0.14.9 deprecates its API, so the use is scoped with `#[allow(deprecated)]`.
