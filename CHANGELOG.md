@@ -1,8 +1,47 @@
 # Changelog
 
-## Unreleased
+## 2.0.0
 
-- **Breaking: sealed login states are bound to the user identifier.** `StartSealedLogin` authenticates `userIdentifier` together with the sealed state (seal format version 2; version 1 states in flight at upgrade fail once). Finish with the new `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)`, which fails for any other user and is always single-use. The two overloads without `userIdentifier` are `[Obsolete(error: true)]` and throw `NotSupportedException`: they let a valid state and finish message of one account complete a login presented for another account, and the four-argument one was replayable for two minutes. The native `finish_server_login_sealed` export takes the identifier as its second argument.
+Security and cleanup release from a full audit. **Breaking**: read "Migrating from 1.x" first.
+
+### Breaking changes
+
+- **Sealed login states are bound to the user identifier.** `StartSealedLogin` authenticates `userIdentifier` together with the sealed state (seal format version 2; version 1 states in flight at upgrade fail once). Finish with `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)`, which fails for any other user and is always single-use. Before, a valid state and finish message of one account could complete a login presented for another account, and the overload without `tryConsume` was replayable for two minutes. The two overloads without `userIdentifier` are `[Obsolete(error: true)]` and throw `NotSupportedException`. The native `finish_server_login_sealed` export takes the identifier as its second argument.
+- **Raw server login API removed.** `OpaqueServer.StartLogin` (both overloads), `OpaqueServer.FinishLogin`, `StartServerLoginResult` and the native `start_server_login` / `finish_server_login` exports are gone: the raw state was a bearer secret.
+- **`KSFConfig` is numeric.** `Iterations`, `Memory` and `Parallelism` are `int?` (set only for the custom profile) and `TypeString` is removed; the FFI passes the profile and costs as numbers. `KSFConfigType` values are explicit (0-2).
+- **Removed compatibility members:** `StringParamIsEmptyException.MaximumPasswordLength` / `MaximumIdentifierLength` / `MaximumProtocolMessageLength`, `ThrowIfEmpty`, `ThrowIfLongerThan`; `FinishClientRegistrationResult.ServerStaicPublicKey`; `FunctionHelper` is internal.
+- `StringParamIsEmptyException` derives from `ArgumentException`, so one `catch (ArgumentException)` covers every argument check.
+
+### Security fixes
+
+- An undecodable stored registration record (corrupt, placeholder, other cipher suite, trailing bytes) takes the unknown-user dummy path instead of failing fast, which was an account-existence oracle.
+- Sealed states whose expiry is more than TTL + 30 s ahead are refused.
+- Native result handles are never-reused tokens instead of addresses, so a stale handle can no longer reach a newer result allocated at the same address.
+- Passwords and `serverSetup` cross the FFI through pinned buffers that are zeroed after the call; the Argon2 memory matrix and serialized secret temporaries are zeroized (about 25% more client login latency).
+- Result types holding secrets have redacted `ToString()` and `[JsonIgnore]` where applicable.
+- `TryExecute` rethrows process-level faults (out of memory, stack, marshalling, SEH) instead of reporting them as a failed login; native results are read inside it.
+- `NativeLibraryResolver` ignores relative probe directories and traces when another resolver pre-empts it. Windows builds link the C runtime statically, so `opaque.dll` imports only system DLLs.
+- Release profile enables `overflow-checks`.
+
+### CI and supply chain
+
+- The release gate uses `refs/remotes/origin/main` (a tag named `origin/main` could shadow it); the main-source check requires the PR to come from this repository; the release tag reaches pwsh through an environment variable; release assets are no longer `--clobber`ed, so GitHub and NuGet cannot diverge on a re-run.
+- `persist-credentials: false` on every checkout; the native artifact is uploaded before any restore or test code runs.
+- `cargo audit` denies unsound and yanked crates, and `cargo deny check` enforces `deny.toml`. Dependabot covers the zig wheels and both NuGet projects, with a cooldown. `pack-and-verify.sh` rejects unexpected package entries and checks native architectures.
+
+### Cleanup
+
+- Native core: payload-free unit `Error`, `unwrap_or_default` at the entry points, one 64 KiB limit constant, no duplicated null checks, sealed start decodes the setup once.
+- .NET: one `ParamGuard` call per argument, no redundant handle checks or empty constructors.
+- Docs: private vulnerability reporting through GitHub, `usage.md` uses one process-wide `LoginStateReplayCache`, the account-existence timing residual (~1%) and clock dependence are documented.
+
+### Migrating from 1.x
+
+1. Replace `StartLogin` / `FinishLogin(serverLoginState, …)` with `StartSealedLogin` / `FinishSealedLogin`.
+2. Pass the same `userIdentifier` to `FinishSealedLogin` that you passed to `StartSealedLogin`, plus a `tryConsume` backed by shared atomic storage (or one process-wide `LoginStateReplayCache` for a single instance).
+3. Read `KSFConfig.Iterations` / `Memory` / `Parallelism` as `int?`; drop uses of `TypeString`.
+4. Replace `StringParamIsEmptyException.Maximum*` with your own constants and `ServerStaicPublicKey` with `ServerStaticPublicKey`.
+5. Logins in flight during the upgrade fail once (seal format v2); the client simply retries.
 
 ## 1.6.0
 
