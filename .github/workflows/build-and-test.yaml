@@ -32,7 +32,8 @@ jobs:
   # Separate job on purpose: `cargo install` cannot be checksum-pinned and runs build scripts, so it
   # must not share a runner with the jobs whose output is packed. Still gates releases, because
   # publish.yaml needs this whole workflow to pass. Fails on known-vulnerable, unsound or yanked
-  # dependencies; unmaintained advisories only warn. Ignores live in .cargo/audit.toml.
+  # dependencies; unmaintained advisories only warn. Ignores live in .cargo/audit.toml. cargo-deny
+  # additionally enforces deny.toml (licenses, sources, wildcard bans, advisories).
   audit:
     name: Audit dependencies
     runs-on: ubuntu-latest
@@ -47,6 +48,11 @@ jobs:
         run: |
           cargo +stable install --locked cargo-audit --version 0.22.2
           cargo audit --deny unsound --deny yanked
+
+      - name: Check supply-chain policy (deny.toml)
+        run: |
+          cargo +stable install --locked cargo-deny --version 0.20.2
+          cargo deny check
 
   build_and_test:
     name: Build and test (${{ matrix.rid }})
