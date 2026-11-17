@@ -1,6 +1,5 @@
 use libc::c_char;
 use std::collections::HashSet;
-use std::ffi::CStr;
 use std::ffi::CString;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
@@ -48,12 +47,8 @@ pub fn csharp_string_to_rust_string(s: *const c_char) -> Result<Zeroizing<String
     if len > MAX_FFI_STRING_LEN {
         return Err(FfiStringError::TooLong);
     }
-    let bytes = unsafe { std::slice::from_raw_parts(s.cast::<u8>(), len + 1) };
-    let c_str = CStr::from_bytes_with_nul(bytes).map_err(|_| FfiStringError::TooLong)?;
-    let bytes = c_str.to_bytes();
-    if bytes.len() > MAX_FFI_STRING_LEN {
-        return Err(FfiStringError::TooLong);
-    }
+    // strnlen stopped at a NUL within the bound, so these `len` bytes are readable and NUL-free.
+    let bytes = unsafe { std::slice::from_raw_parts(s.cast::<u8>(), len) };
     let value = std::str::from_utf8(bytes).map_err(|_| FfiStringError::InvalidUtf8)?;
     Ok(Zeroizing::new(value.to_owned()))
 }
@@ -83,6 +78,21 @@ pub extern "C" fn free_string(s: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accepts_exactly_the_maximum_length_and_rejects_one_more() {
+        let mut at_max = vec![b'x'; MAX_FFI_STRING_LEN];
+        at_max.push(0);
+        let value = csharp_string_to_rust_string(at_max.as_ptr().cast()).unwrap();
+        assert_eq!(value.len(), MAX_FFI_STRING_LEN);
+
+        let mut over = vec![b'x'; MAX_FFI_STRING_LEN + 1];
+        over.push(0);
+        assert!(matches!(
+            csharp_string_to_rust_string(over.as_ptr().cast()),
+            Err(FfiStringError::TooLong)
+        ));
+    }
 
     #[test]
     fn registry_lock_survives_a_poisoning_panic() {

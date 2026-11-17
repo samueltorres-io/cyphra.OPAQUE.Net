@@ -1,6 +1,4 @@
-﻿// The legacy raw-state API is obsolete on purpose; these tests still cover it (and its replacement).
-#pragma warning disable CS0618
-using OPAQUE.Net;
+﻿using OPAQUE.Net;
 using OPAQUE.Net.Helpers;
 using OPAQUE.Net.Types.Exceptions;
 using OPAQUE.Net.Types.Parameters;
@@ -68,8 +66,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
-                null, null, out StartServerLoginResult? serverLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
+                null, null, out StartSealedServerLoginResult? serverLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -89,7 +87,7 @@ namespace Test
             Assert.AreEqual(serverStaticPublicKey, finishClientLoginResult.ServerStaticPublicKey);
             Assert.AreEqual(finishClientLoginResult.ServerStaticPublicKey, serverPublicKey);
 
-            if (!server.FinishLogin(serverLoginResult.ServerLoginState, finishClientLoginResult.FinishLoginRequest, out string? sessionKey))
+            if (!server.FinishSealedLogin(serverSetup, userIdentifier, serverLoginResult.SealedLoginState, finishClientLoginResult.FinishLoginRequest, _ => true, out string? sessionKey))
             {
                 throw new Exception();
             }
@@ -116,8 +114,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
-                null, null, out StartServerLoginResult? serverLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
+                null, null, out StartSealedServerLoginResult? serverLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -137,7 +135,7 @@ namespace Test
             Assert.AreEqual(serverStaticPublicKey, finishClientLoginResult.ServerStaticPublicKey);
             Assert.AreEqual(finishClientLoginResult.ServerStaticPublicKey, serverPublicKey);
 
-            if (!server.FinishLogin(serverLoginResult.ServerLoginState, finishClientLoginResult.FinishLoginRequest, out string? sessionKey))
+            if (!server.FinishSealedLogin(serverSetup, userIdentifier, serverLoginResult.SealedLoginState, finishClientLoginResult.FinishLoginRequest, _ => true, out string? sessionKey))
             {
                 throw new Exception();
             }
@@ -164,8 +162,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
-                null, null, out StartServerLoginResult? serverLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
+                null, null, out StartSealedServerLoginResult? serverLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -185,7 +183,7 @@ namespace Test
             Assert.AreEqual(serverStaticPublicKey, finishClientLoginResult.ServerStaticPublicKey);
             Assert.AreEqual(finishClientLoginResult.ServerStaticPublicKey, serverPublicKey);
 
-            if (!server.FinishLogin(serverLoginResult.ServerLoginState, finishClientLoginResult.FinishLoginRequest, out string? sessionKey))
+            if (!server.FinishSealedLogin(serverSetup, userIdentifier, serverLoginResult.SealedLoginState, finishClientLoginResult.FinishLoginRequest, _ => true, out string? sessionKey))
             {
                 throw new Exception();
             }
@@ -210,8 +208,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
-                null, null, out StartServerLoginResult? serverLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
+                null, null, out StartSealedServerLoginResult? serverLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -242,8 +240,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
-                null, null, out StartServerLoginResult? serverLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, clientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
+                null, null, out StartSealedServerLoginResult? serverLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -272,8 +270,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, startClientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
-                clientIdentifier, null, out StartServerLoginResult? startServerLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, startClientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord,
+                clientIdentifier, null, out StartSealedServerLoginResult? startServerLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -302,8 +300,8 @@ namespace Test
                 throw new Exception();
             }
 
-            if (!server.StartLogin(serverSetup, startClientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord, null,
-                serverIdentifier + "-abc", out StartServerLoginResult? startServerLoginResult, out _))
+            if (!server.StartSealedLogin(serverSetup, startClientLoginResult!.StartLoginRequest, userIdentifier, registrationRecord, null,
+                serverIdentifier + "-abc", out StartSealedServerLoginResult? startServerLoginResult, out _))
             {
                 throw new Exception();
             }
@@ -354,12 +352,10 @@ namespace Test
             Assert.ThrowsException<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("Value", "", "Value", out _));
             Assert.ThrowsException<StringParamIsEmptyException>(() => server.CreateRegistrationResponse("Value", "Value", "", out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartLogin("", "Value", "Value", null, null, null, out _, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartLogin("Value", "", "Value", null, null, null, out _, out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartLogin("Value", "Value", "", null, null, null, out _, out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartSealedLogin("", "Value", "Value", null, null, null, out _, out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "", "Value", null, null, null, out _, out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "Value", "", null, null, null, out _, out _));
 
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.FinishLogin("", "Value", out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => server.FinishLogin("Value", "", out _));
         }
 
         // ---- adversarial and failure-mode coverage ----
@@ -377,47 +373,17 @@ namespace Test
             return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
 
-        private static void Login(string serverSetup, string record, out StartServerLoginResult server, out FinishClientLoginResult client)
-        {
-            var c = new OpaqueClient();
-            var s = new OpaqueServer();
-            Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
-            Assert.IsTrue(s.StartLogin(serverSetup, start!.StartLoginRequest, User, record, out StartServerLoginResult? serverResult, out _));
-            Assert.IsTrue(c.FinishLogin(start.ClientLoginState, serverResult!.LoginResponse, Password, out FinishClientLoginResult? clientResult));
-            server = serverResult;
-            client = clientResult!;
-        }
-
         [TestMethod]
         public void DeploymentFaultsAreNotSwallowedButProtocolFaultsAre()
         {
             Assert.ThrowsException<DllNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new DllNotFoundException()));
             Assert.ThrowsException<EntryPointNotFoundException>(() => FunctionHelper.TryExecute<string>(() => throw new EntryPointNotFoundException(), out _));
             Assert.ThrowsException<BadImageFormatException>(() => FunctionHelper.TryExecute<string>(() => throw new BadImageFormatException()));
+            Assert.ThrowsException<OutOfMemoryException>(() => FunctionHelper.TryExecute<string>(() => throw new OutOfMemoryException(), out _));
 
             Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException()));
             Assert.IsNull(FunctionHelper.TryExecute<string>(() => throw new InvalidOperationException(), out Exception? e));
             Assert.IsInstanceOfType(e, typeof(InvalidOperationException));
-        }
-
-        [TestMethod]
-        public void TamperedFinalizationIsRejectedByServer()
-        {
-            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
-            Login(setup, record, out StartServerLoginResult server, out FinishClientLoginResult client);
-
-            Assert.IsFalse(new OpaqueServer().FinishLogin(server.ServerLoginState, Flip(client.FinishLoginRequest), out string? key));
-            Assert.IsTrue(string.IsNullOrEmpty(key));
-        }
-
-        [TestMethod]
-        public void FinalizationFromAnotherSessionIsRejected()
-        {
-            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
-            Login(setup, record, out StartServerLoginResult serverA, out _);
-            Login(setup, record, out _, out FinishClientLoginResult clientB);
-
-            Assert.IsFalse(new OpaqueServer().FinishLogin(serverA.ServerLoginState, clientB.FinishLoginRequest, out _));
         }
 
         [TestMethod]
@@ -426,7 +392,7 @@ namespace Test
             SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
             var c = new OpaqueClient();
             Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
-            Assert.IsTrue(new OpaqueServer().StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? server, out _));
+            Assert.IsTrue(new OpaqueServer().StartSealedLogin(setup, start!.StartLoginRequest, User, record, out StartSealedServerLoginResult? server, out _));
 
             Assert.IsFalse(c.FinishLogin(start.ClientLoginState, Flip(server!.LoginResponse), Password, out FinishClientLoginResult? result));
             Assert.IsNull(result);
@@ -441,7 +407,7 @@ namespace Test
             Assert.IsTrue(client.StartLogin(Password, out StartClientLoginResult? start));
 
             // No registration record: the server must still answer (no user enumeration here).
-            Assert.IsTrue(server.StartLogin(setup!, start!.StartLoginRequest, "nobody", null, out StartServerLoginResult? response, out _));
+            Assert.IsTrue(server.StartSealedLogin(setup!, start!.StartLoginRequest, "nobody", null, out StartSealedServerLoginResult? response, out _));
             Assert.IsFalse(client.FinishLogin(start.ClientLoginState, response!.LoginResponse, Password, out FinishClientLoginResult? result));
             Assert.IsNull(result);
         }
@@ -450,8 +416,8 @@ namespace Test
         public void EachLoginProducesAFreshSessionKey()
         {
             SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
-            Login(setup, record, out _, out FinishClientLoginResult first);
-            Login(setup, record, out _, out FinishClientLoginResult second);
+            SealedLogin(setup, record, out _, out FinishClientLoginResult first);
+            SealedLogin(setup, record, out _, out FinishClientLoginResult second);
 
             Assert.AreNotEqual(first.SessionKey, second.SessionKey);
             Assert.AreEqual(first.ExportKey, second.ExportKey);
@@ -469,8 +435,8 @@ namespace Test
                 Assert.IsFalse(server.GetPublicKey(garbage, out _));
                 Assert.IsFalse(server.CreateRegistrationResponse(garbage, User, garbage, out _));
                 Assert.IsFalse(server.CreateRegistrationResponse(setup!, User, garbage, out _));
-                Assert.IsFalse(server.StartLogin(setup!, garbage, User, null, out _, out _));
-                Assert.IsFalse(server.FinishLogin(garbage, garbage, out _));
+                Assert.IsFalse(server.StartSealedLogin(setup!, garbage, User, null, out _, out _));
+                Assert.IsFalse(server.FinishSealedLogin(setup!, User, garbage, garbage, _ => true, out _));
                 Assert.IsFalse(client.FinishRegistration(Password, garbage, garbage, out _));
                 Assert.IsFalse(client.FinishLogin(garbage, garbage, Password, out _));
             }
@@ -480,13 +446,13 @@ namespace Test
         public void OversizedInputsAreRejectedBeforeNativeInvocation()
         {
             OpaqueServer server = new OpaqueServer();
-            string huge = new string('A', StringParamIsEmptyException.MaximumProtocolMessageLength + 1);
-            string longId = new string('u', StringParamIsEmptyException.MaximumIdentifierLength + 1);
+            string huge = new string('A', ParamGuard.MaximumProtocolMessageLength + 1);
+            string longId = new string('u', ParamGuard.MaximumIdentifierLength + 1);
 
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.GetPublicKey(huge, out _));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.CreateRegistrationResponse("a", longId, "a", out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartLogin("a", "a", "u", null, longId, null, out _, out _));
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', StringParamIsEmptyException.MaximumPasswordLength + 1), out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => server.StartSealedLogin("a", "a", "u", null, longId, null, out _, out _));
+            Assert.ThrowsException<ArgumentOutOfRangeException>(() => new OpaqueClient().StartRegistration(new string('p', ParamGuard.MaximumPasswordLength + 1), out _));
         }
   
         [TestMethod]
@@ -499,7 +465,7 @@ namespace Test
                 Assert.ThrowsException<ArgumentException>(() => client.StartRegistration(bad, out _));
                 Assert.ThrowsException<ArgumentException>(() => client.StartLogin(bad, out _));
                 Assert.ThrowsException<ArgumentException>(() => server.CreateRegistrationResponse("a", bad, "a", out _));
-                Assert.ThrowsException<ArgumentException>(() => server.StartLogin("a", "a", "u", null, bad, null, out _, out _));
+                Assert.ThrowsException<ArgumentException>(() => server.StartSealedLogin("a", "a", "u", null, bad, null, out _, out _));
             }
         }
 
@@ -543,9 +509,9 @@ namespace Test
         }
   
         [TestMethod]
-        public void ServerLoginStateIsNotRevealedByToString()
+        public void SealedLoginStateIsNotRevealedByToString()
         {
-            var result = new StartServerLoginResult("SECRET-STATE", "response");
+            var result = new StartSealedServerLoginResult("SECRET-STATE", "response");
             StringAssert.DoesNotMatch(result.ToString()!, new System.Text.RegularExpressions.Regex("SECRET-STATE"));
         }
   
@@ -572,7 +538,7 @@ namespace Test
             SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
             SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
 
-            Assert.IsTrue(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, out string? key));
+            Assert.IsTrue(new OpaqueServer().FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, _ => true, out string? key));
             Assert.AreEqual(client.SessionKey, key);
 
             byte[] blob = FromBase64Url(server.SealedLoginState);
@@ -581,20 +547,15 @@ namespace Test
         }
 
         [TestMethod]
-        public void SealedStateRejectsTamperingForeignSetupAndLegacyMixing()
+        public void SealedStateRejectsTamperingAndForeignSetup()
         {
             SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
             SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
             var s = new OpaqueServer();
 
-            Assert.IsFalse(s.FinishSealedLogin(setup, Flip(server.SealedLoginState), client.FinishLoginRequest, out _));
+            Assert.IsFalse(s.FinishSealedLogin(setup, User, Flip(server.SealedLoginState), client.FinishLoginRequest, _ => true, out _));
             Assert.IsTrue(s.CreateSetup(out string? otherSetup));
-            Assert.IsFalse(s.FinishSealedLogin(otherSetup!, server.SealedLoginState, client.FinishLoginRequest, out _));
-            // A sealed state is not a raw state, and a raw state is not accepted as sealed.
-            Assert.IsFalse(s.FinishLogin(server.SealedLoginState, client.FinishLoginRequest, out _));
-            Assert.IsTrue(new OpaqueClient().StartLogin(Password, out StartClientLoginResult? start));
-            Assert.IsTrue(s.StartLogin(setup, start!.StartLoginRequest, User, record, out StartServerLoginResult? legacy, out _));
-            Assert.IsFalse(s.FinishSealedLogin(setup, legacy!.ServerLoginState, client.FinishLoginRequest, out _));
+            Assert.IsFalse(s.FinishSealedLogin(otherSetup!, User, server.SealedLoginState, client.FinishLoginRequest, _ => true, out _));
         }
 
         [TestMethod]
@@ -605,9 +566,9 @@ namespace Test
             var s = new OpaqueServer();
             var cache = new LoginStateReplayCache();
 
-            Assert.IsTrue(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? key));
+            Assert.IsTrue(s.FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? key));
             Assert.IsNotNull(key);
-            Assert.IsFalse(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? replayKey));
+            Assert.IsFalse(s.FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out string? replayKey));
             Assert.IsNull(replayKey);
         }
 
@@ -617,7 +578,7 @@ namespace Test
             SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
             SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
 
-            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState + "=", client.FinishLoginRequest, _ => true, out _));
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, User, server.SealedLoginState + "=", client.FinishLoginRequest, _ => true, out _));
         }
 
         [TestMethod]
@@ -628,7 +589,7 @@ namespace Test
             string? key = "x";
 
             Assert.ThrowsException<InvalidOperationException>(() =>
-                new OpaqueServer().FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, _ => throw new InvalidOperationException(), out key));
+                new OpaqueServer().FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, _ => throw new InvalidOperationException(), out key));
             Assert.IsNull(key);
         }
 
@@ -640,8 +601,22 @@ namespace Test
             var s = new OpaqueServer();
             var cache = new LoginStateReplayCache();
 
-            Assert.IsFalse(s.FinishSealedLogin(setup, server.SealedLoginState, Flip(client.FinishLoginRequest), cache.TryConsume, out _));
-            Assert.IsTrue(s.FinishSealedLogin(setup, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out _));
+            Assert.IsFalse(s.FinishSealedLogin(setup, User, server.SealedLoginState, Flip(client.FinishLoginRequest), cache.TryConsume, out _));
+            Assert.IsTrue(s.FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, cache.TryConsume, out _));
+        }
+
+        [TestMethod]
+        public void SealedStateIsBoundToItsUserIdentifier()
+        {
+            SetupAndRegister(User, Password, null, null, null, out string setup, out string record, out _, out _);
+            SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
+            var s = new OpaqueServer();
+
+            // A valid state and finish message of User must not complete a login claimed for another account.
+            Assert.IsFalse(s.FinishSealedLogin(setup, "victim", server.SealedLoginState, client.FinishLoginRequest, _ => true, out string? key));
+            Assert.IsNull(key);
+            Assert.IsTrue(s.FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, _ => true, out key));
+            Assert.AreEqual(client.SessionKey, key);
         }
 
         [TestMethod]
@@ -651,18 +626,19 @@ namespace Test
             SealedLogin(setup, record, out StartSealedServerLoginResult serverA, out _);
             SealedLogin(setup, record, out _, out FinishClientLoginResult clientB);
 
-            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, serverA.SealedLoginState, clientB.FinishLoginRequest, out _));
+            Assert.IsFalse(new OpaqueServer().FinishSealedLogin(setup, User, serverA.SealedLoginState, clientB.FinishLoginRequest, _ => true, out _));
         }
 
         [TestMethod]
         public void SealedLoginValidatesArguments()
         {
             var s = new OpaqueServer();
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("", "a", "a", out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "", "a", out _));
-            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "a", "", out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("", User, "a", "a", _ => true, out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", User, "", "a", _ => true, out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", User, "a", "", _ => true, out _));
+            Assert.ThrowsException<StringParamIsEmptyException>(() => s.FinishSealedLogin("a", "", "a", "a", _ => true, out _));
             Assert.ThrowsException<ArgumentException>(() => s.StartSealedLogin("a", "a", "u\0x", null, out _, out _));
-            Assert.IsFalse(s.FinishSealedLogin("a", "a", "a", out _));
+            Assert.IsFalse(s.FinishSealedLogin("a", User, "a", "a", _ => true, out _));
         }
 
         [TestMethod]
@@ -677,7 +653,7 @@ namespace Test
             Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
             Assert.IsTrue(s.StartSealedLogin(setup, start!.StartLoginRequest, User, record, clientId, serverId, out StartSealedServerLoginResult? ok, out _));
             Assert.IsTrue(c.FinishLogin(start.ClientLoginState, ok!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? finished));
-            Assert.IsTrue(s.FinishSealedLogin(setup, ok.SealedLoginState, finished!.FinishLoginRequest, out string? key));
+            Assert.IsTrue(s.FinishSealedLogin(setup, User, ok.SealedLoginState, finished!.FinishLoginRequest, _ => true, out string? key));
             Assert.AreEqual(finished.SessionKey, key);
 
             // The server answering under another identity must not yield keys on the client.
@@ -745,12 +721,20 @@ namespace Test
         [TestMethod]
         public void KsfConfigAcceptsBoundsAndRejectsEverythingOutside()
         {
-            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
-                KSFConfig.MinimumIterations, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism).TypeString);
-            Assert.AreEqual("custom", KSFConfig.Create(KSFConfigType.Custom,
-                KSFConfig.MaximumIterations, KSFConfig.MaximumCustomMemoryKiB, KSFConfig.MaximumParallelism).TypeString);
-            Assert.AreEqual("memoryConstrained", KSFConfig.Create(KSFConfigType.MemoryConstrained).TypeString);
-            Assert.AreEqual("rfcDraftRecommended", KSFConfig.CreateRfcDraftRecommended(true).TypeString);
+            KSFConfig min = KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MinimumIterations, KSFConfig.MinimumMemoryKiB, KSFConfig.MinimumParallelism);
+            Assert.AreEqual(KSFConfigType.Custom, min.Type);
+            Assert.AreEqual(KSFConfig.MinimumMemoryKiB, min.Memory);
+            Assert.AreEqual(KSFConfigType.Custom, KSFConfig.Create(KSFConfigType.Custom,
+                KSFConfig.MaximumIterations, KSFConfig.MaximumCustomMemoryKiB, KSFConfig.MaximumParallelism).Type);
+            KSFConfig named = KSFConfig.Create(KSFConfigType.MemoryConstrained);
+            Assert.AreEqual(KSFConfigType.MemoryConstrained, named.Type);
+            Assert.IsNull(named.Iterations);
+            Assert.AreEqual(KSFConfigType.RfcDraftRecommended, KSFConfig.CreateRfcDraftRecommended(true).Type);
+            // The native side maps these exact values.
+            Assert.AreEqual(0, (int)KSFConfigType.RfcDraftRecommended);
+            Assert.AreEqual(1, (int)KSFConfigType.MemoryConstrained);
+            Assert.AreEqual(2, (int)KSFConfigType.Custom);
 
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, KSFConfig.MaximumIterations + 1, KSFConfig.MinimumMemoryKiB, 1));
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => KSFConfig.Create(KSFConfigType.Custom, 1, KSFConfig.MaximumCustomMemoryKiB + 1, 1));

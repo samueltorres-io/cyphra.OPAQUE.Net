@@ -1,4 +1,4 @@
-# Local supply-chain policy for `cargo deny check` (not run in CI: `cargo audit` is the CI gate).
+# Supply-chain policy for `cargo deny check`, enforced by the audit job in CI next to `cargo audit`.
 # Mirrors .cargo/audit.toml; keep the two ignores in sync.
 
 [advisories]

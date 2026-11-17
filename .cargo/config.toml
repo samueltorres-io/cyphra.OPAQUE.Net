@@ -1,0 +1,8 @@
+# Link the MSVC C runtime statically. opaque.dll then imports only system DLLs (KERNEL32, api-ms-win-*,
+# ntdll), so Windows never searches the working directory or PATH for a VCRUNTIME140.dll to load with
+# it: NativeLibraryResolver controls where opaque.dll comes from, not where its dependencies come from.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

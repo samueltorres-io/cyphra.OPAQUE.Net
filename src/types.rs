@@ -1,56 +1,64 @@
 use crate::csharp;
 use argon2::Argon2;
 use libc::c_char;
-use std::any::TypeId;
-use std::collections::HashSet;
+use std::any::Any;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use zeroize::Zeroizing;
 
-// Keyed by address *and* type: after a handle is freed its address can be reused by an allocation
-// of another result type, and a stale pointer must not be able to free that one as the wrong type.
-type Registry = HashSet<(usize, TypeId)>;
+// Handles are never-reused tokens that own their result, not addresses: once freed, a handle stays
+// dead even after the allocator gives its memory to a new result of the same or another type, and a
+// token presented as the wrong type finds nothing.
+type Registry = HashMap<usize, Box<dyn Any + Send>>;
 
 static LIVE_RESULT_HANDLES: OnceLock<Mutex<Registry>> = OnceLock::new();
+// ponytail: a usize counter; it would take 2^64 results (2^32 on a 32-bit host) to wrap.
+static NEXT_RESULT_HANDLE: AtomicUsize = AtomicUsize::new(1);
 
 fn live_result_handles() -> MutexGuard<'static, Registry> {
     csharp::lock_registry(LIVE_RESULT_HANDLES.get_or_init(Default::default))
 }
 
-pub fn into_result_handle<T: 'static>(value: T) -> *mut T {
-    let ptr = Box::into_raw(Box::new(value));
-    live_result_handles().insert((ptr as usize, TypeId::of::<T>()));
-    ptr
+pub fn into_result_handle<T: Any + Send>(value: T) -> *mut T {
+    let id = NEXT_RESULT_HANDLE.fetch_add(1, Ordering::Relaxed);
+    live_result_handles().insert(id, Box::new(value));
+    id as *mut T
 }
 
-fn release_result_handle<T: 'static>(ptr: *mut T) {
-    if ptr.is_null() {
-        return;
-    }
-    if live_result_handles().remove(&(ptr as usize, TypeId::of::<T>())) {
-        csharp::ffi_boundary(|| unsafe { drop(Box::from_raw(ptr)) }, ());
+fn release_result_handle<T: Any>(ptr: *mut T) {
+    let mut handles = live_result_handles();
+    if handles
+        .get(&(ptr as usize))
+        .is_some_and(|value| value.is::<T>())
+    {
+        let value = handles.remove(&(ptr as usize));
+        drop(handles);
+        csharp::ffi_boundary(|| drop(value), ());
     }
 }
 
-fn with_live_result_handle<T: 'static, R>(ptr: *mut T, action: impl FnOnce(&T) -> R) -> Option<R> {
-    if ptr.is_null() {
-        return None;
-    }
+fn with_live_result_handle<T: Any, R>(ptr: *mut T, action: impl FnOnce(&T) -> R) -> Option<R> {
     let handles = live_result_handles();
-    if !handles.contains(&(ptr as usize, TypeId::of::<T>())) {
-        return None;
-    }
     // The registry lock is held until `action` returns, preventing concurrent release.
-    Some(action(unsafe { &*ptr }))
+    handles
+        .get(&(ptr as usize))?
+        .downcast_ref::<T>()
+        .map(action)
 }
 
 macro_rules! result_string {
     ($ptr:expr, $field:ident) => {
         csharp::ffi_boundary(
             || {
+                // Copy the field under the registry lock and build the C string after releasing it,
+                // so the lock every getter and free needs is held only for the copy.
                 with_live_result_handle($ptr, |result| {
-                    csharp::rust_string_to_csharp_string_handle(&result.$field)
+                    Zeroizing::new(String::clone(&result.$field))
                 })
-                .unwrap_or(std::ptr::null_mut())
+                .map_or(std::ptr::null_mut(), |value| {
+                    csharp::rust_string_to_csharp_string_handle(&value)
+                })
             },
             std::ptr::null_mut(),
         )
@@ -60,15 +68,6 @@ macro_rules! result_string {
 pub struct CustomIdentifiers {
     pub client: Option<String>,
     pub server: Option<String>,
-}
-
-impl CustomIdentifiers {
-    pub fn new(client_param: Option<String>, server_param: Option<String>) -> CustomIdentifiers {
-        CustomIdentifiers {
-            client: client_param,
-            server: server_param,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -123,16 +122,7 @@ pub extern "C" fn get_start_server_login_response_response(
 
 #[no_mangle]
 pub extern "C" fn free_start_server_login_result(ptr: *mut StartServerLoginResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
-}
-
-pub struct FinishServerLoginParams {
-    pub server_login_state: Zeroizing<String>,
-    pub finish_login_request: Zeroizing<String>,
 }
 
 #[derive(Default)]
@@ -157,10 +147,6 @@ pub extern "C" fn get_start_client_login_result_request(
 
 #[no_mangle]
 pub extern "C" fn free_start_client_login_result(ptr: *mut StartClientLoginResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -210,10 +196,6 @@ pub extern "C" fn get_finish_client_login_result_public_key(
 
 #[no_mangle]
 pub extern "C" fn free_finish_client_login_result(ptr: *mut FinishClientLoginResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -239,10 +221,6 @@ pub extern "C" fn get_start_client_registration_result_request(
 
 #[no_mangle]
 pub extern "C" fn free_start_client_registration_result(ptr: *mut StartClientRegistrationResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -256,7 +234,7 @@ pub struct FinishClientRegistrationParams {
 
 #[derive(Default)]
 pub struct FinishClientRegistrationResult {
-    pub registration_record: String,
+    pub registration_record: Zeroizing<String>,
     pub export_key: Zeroizing<String>,
     pub server_static_public_key: String,
 }
@@ -284,10 +262,6 @@ pub extern "C" fn get_finish_client_registration_result_public_key(
 
 #[no_mangle]
 pub extern "C" fn free_finish_client_registration_result(ptr: *mut FinishClientRegistrationResult) {
-    if ptr.is_null() {
-        return;
-    }
-
     release_result_handle(ptr);
 }
 
@@ -313,5 +287,19 @@ mod tests {
         release_result_handle(ptr);
         assert_eq!(with_live_result_handle(ptr, |p| p.0), None);
         release_result_handle(ptr);
+    }
+
+    #[test]
+    fn freed_handle_never_reaches_a_later_result() {
+        let stale = into_result_handle(Probe(1));
+        release_result_handle(stale);
+        for _ in 0..64 {
+            let live = into_result_handle(Probe(2));
+            assert_ne!(live, stale);
+            assert_eq!(with_live_result_handle(stale, |p| p.0), None);
+            release_result_handle(stale);
+            assert_eq!(with_live_result_handle(live, |p| p.0), Some(2));
+            release_result_handle(live);
+        }
     }
 }

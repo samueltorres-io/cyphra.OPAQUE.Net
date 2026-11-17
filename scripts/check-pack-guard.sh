@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # F-06 regression check: `dotnet pack` must refuse outside CI, and must pass with the explicit opt-in.
+# The guard keys on GITHUB_ACTIONS, which anyone can set: it prevents accidental local packs, it is not
+# a security boundary.
 set -uo pipefail
 proj=".Net/OPAQUE.Net/OPAQUE.Net.csproj"
 out=$(mktemp -d)

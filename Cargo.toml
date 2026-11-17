@@ -8,6 +8,7 @@ authors = [
   "Nik Graf <nik@nikgraf.com>",
 ]
 edition = "2018"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -38,5 +39,8 @@ sha2 = "0.11"
 # runs it about 27% faster than "s" (213 ms vs 292 ms per MemoryConstrained hash, measured) for a
 # 1.7% larger library. Level 3 gains nothing more.
 opt-level = 2
+# Integer overflow panics (caught by the FFI panic boundary) instead of wrapping silently. The cost is
+# noise next to Argon2.
+overflow-checks = true
 # Do not set `panic = "abort"`: the FFI entry points rely on catch_unwind to keep a panic from
 # terminating the host process (see csharp::ffi_boundary).
