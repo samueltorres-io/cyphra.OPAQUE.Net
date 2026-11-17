@@ -3,7 +3,7 @@
 namespace OPAQUE.Net
 {
     /// <summary>
-    /// In-memory single-use registry for <see cref="OpaqueServer.FinishSealedLogin(string, string, string, Func{string, bool}, out string?)"/>.
+    /// In-memory single-use registry for <see cref="OpaqueServer.FinishSealedLogin(string, string, string, string, Func{string, bool}, out string?)"/>.
     /// Only correct for a single server instance; with several instances use shared storage instead.
     /// </summary>
     public sealed class LoginStateReplayCache

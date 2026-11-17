@@ -4,6 +4,7 @@ using OPAQUE.Net.Types.Handles;
 using OPAQUE.Net.Types.Parameters;
 using OPAQUE.Net.Types.Results;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace OPAQUE.Net
 {
@@ -22,7 +23,15 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
             ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
 
-            result = FunctionHelper.TryExecute(() => start_client_registration(password))?.GetAndRelease();
+            byte[] pw = ParamGuard.ToNativeUtf8(password);
+            try
+            {
+                result = FunctionHelper.TryExecute(() => start_client_registration(pw)?.GetAndRelease());
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(pw);
+            }
             return result != null;
         }
 
@@ -64,8 +73,16 @@ namespace OPAQUE.Net
 
             config ??= KSFConfig.Create(KSFConfigType.MemoryConstrained);
 
-            result = FunctionHelper.TryExecute(() => finish_client_registration(password, registrationResponse, 
-                clientRegistrationState, clientIdentifier ?? "", serverIdentifier ?? "", config.TypeString, config.Iterations, config.Memory, config.Parallelism))?.GetAndRelease();
+            byte[] pw = ParamGuard.ToNativeUtf8(password);
+            try
+            {
+                result = FunctionHelper.TryExecute(() => finish_client_registration(pw, registrationResponse,
+                    clientRegistrationState, clientIdentifier ?? "", serverIdentifier ?? "", config.TypeString, config.Iterations, config.Memory, config.Parallelism)?.GetAndRelease());
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(pw);
+            }
 
             return result != null;
         }
@@ -81,7 +98,15 @@ namespace OPAQUE.Net
             StringParamIsEmptyException.ThrowIfEmpty(password, nameof(password));
             ParamGuard.ThrowIfInvalid(password, ParamGuard.MaximumPasswordLength, nameof(password));
 
-            result = FunctionHelper.TryExecute(() => start_client_login(password))?.GetAndRelease();
+            byte[] pw = ParamGuard.ToNativeUtf8(password);
+            try
+            {
+                result = FunctionHelper.TryExecute(() => start_client_login(pw)?.GetAndRelease());
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(pw);
+            }
             return result != null;
         }
 
@@ -123,24 +148,32 @@ namespace OPAQUE.Net
 
             config ??= KSFConfig.Create(KSFConfigType.MemoryConstrained);
 
-            result = FunctionHelper.TryExecute(() => finish_client_login(clientLoginState, serverLoginResponse, 
-                password, clientIdentifier ?? "", serverIdentifier ?? "", config.TypeString, config.Iterations, config.Memory, config.Parallelism))?.GetAndRelease();
+            byte[] pw = ParamGuard.ToNativeUtf8(password);
+            try
+            {
+                result = FunctionHelper.TryExecute(() => finish_client_login(clientLoginState, serverLoginResponse,
+                    pw, clientIdentifier ?? "", serverIdentifier ?? "", config.TypeString, config.Iterations, config.Memory, config.Parallelism)?.GetAndRelease());
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(pw);
+            }
 
             return result != null;
         }
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StartClientRegistrationResultHandle? start_client_registration([MarshalAs(UnmanagedType.LPUTF8Str)] string password);
+        private static extern StartClientRegistrationResultHandle start_client_registration(byte[] password);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern FinishClientRegistrationResultHandle finish_client_registration([MarshalAs(UnmanagedType.LPUTF8Str)] string password, [MarshalAs(UnmanagedType.LPUTF8Str)] string registrationResponse,
+        private static extern FinishClientRegistrationResultHandle finish_client_registration(byte[] password, [MarshalAs(UnmanagedType.LPUTF8Str)] string registrationResponse,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string clientRegistrationState, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StartClientLoginResultHandle start_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string password);
+        private static extern StartClientLoginResultHandle start_client_login(byte[] password);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern FinishClientLoginResultHandle? finish_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string clientLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginResponse, [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
+        private static extern FinishClientLoginResultHandle finish_client_login([MarshalAs(UnmanagedType.LPUTF8Str)] string clientLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginResponse, byte[] password,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string configType, [MarshalAs(UnmanagedType.LPUTF8Str)] string iterations, [MarshalAs(UnmanagedType.LPUTF8Str)] string memory, [MarshalAs(UnmanagedType.LPUTF8Str)] string parallelism);
     }
 }

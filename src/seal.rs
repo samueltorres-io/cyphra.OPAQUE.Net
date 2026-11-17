@@ -2,12 +2,17 @@
 //!
 //! The raw `ServerLogin` state holds the session key and the MAC key that verifies the client's
 //! finish message, so whoever sees it can finish the login without the password. Sealing it with a
-//! key only the server knows makes it safe to park in a cache, cookie or log, keeps the server
-//! stateless, and bounds replay with an expiry that is authenticated together with the state.
+//! key only the server knows makes it safe to keep in any server-side store (it is still not meant
+//! for the client), keeps the server stateless, and bounds replay with an expiry that is
+//! authenticated together with the state.
 //!
-//! Layout: `version(1) || nonce(24) || XChaCha20-Poly1305(expiry_be(8) || state)`, with the version
-//! byte as associated data. The key is HKDF-SHA512 of the server setup, so there is no extra secret
-//! to configure and rotating the setup invalidates in-flight logins (seconds of exposure) only.
+//! Layout: `version(1) || nonce(24) || XChaCha20-Poly1305(expiry_be(8) || state)`, with
+//! `version || user_identifier` as associated data. The user identifier is authenticated but not
+//! stored, so a state opens only for the user it was started for: a valid state and finish message
+//! of one account cannot be presented as another account's login. The key is HKDF-SHA512 of the
+//! server setup, so there is no extra secret to configure. It cannot be rotated on its own: a new
+//! setup also carries a new OPRF seed and server key pair, so it invalidates every registration
+//! record, not just the logins in flight.
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
@@ -16,13 +21,18 @@ use opaque_ke::rand::{rngs::OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::Zeroizing;
 
-const VERSION: u8 = 1;
+// 2: the user identifier joined the associated data. Version 1 states are refused.
+const VERSION: u8 = 2;
 const KDF_INFO: &[u8] = b"cyphra-opaque/login-state/v1";
 const NONCE_LEN: usize = 24;
 const EXPIRY_LEN: usize = 8;
 // ponytail: fixed window; it must cover client-side Argon2 plus the network round trip. Make it a
 // parameter if a deployment needs longer.
 pub const STATE_TTL_SECS: u64 = 120;
+// Expiry is checked against the local wall clock, so instances must agree on the time (NTP). A state
+// whose expiry lies more than TTL + this skew ahead was sealed by a clock that runs ahead or has since
+// stepped back; it is refused instead of living longer than the TTL.
+const MAX_CLOCK_SKEW_SECS: u64 = 30;
 
 #[derive(Debug)]
 pub struct SealError;
@@ -44,7 +54,11 @@ fn cipher(setup: &[u8]) -> Result<XChaCha20Poly1305, SealError> {
     XChaCha20Poly1305::new_from_slice(&*key).map_err(|_| SealError)
 }
 
-pub fn seal(setup: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>, SealError> {
+fn associated_data(user: &[u8]) -> Vec<u8> {
+    [&[VERSION][..], user].concat()
+}
+
+pub fn seal(setup: &[u8], user: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>, SealError> {
     let mut plaintext = Zeroizing::new(Vec::with_capacity(EXPIRY_LEN + state.len()));
     plaintext.extend_from_slice(&now.saturating_add(STATE_TTL_SECS).to_be_bytes());
     plaintext.extend_from_slice(state);
@@ -56,7 +70,7 @@ pub fn seal(setup: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>, SealError> 
             &XNonce::from(nonce),
             Payload {
                 msg: &plaintext,
-                aad: &[VERSION],
+                aad: &associated_data(user),
             },
         )
         .map_err(|_| SealError)?;
@@ -68,9 +82,14 @@ pub fn seal(setup: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>, SealError> 
     Ok(out)
 }
 
-/// Returns the raw state only if the blob is authentic, was sealed under this setup and has not
-/// expired. Every failure is the same error so callers cannot tell the causes apart.
-pub fn open(setup: &[u8], sealed: &[u8], now: u64) -> Result<Zeroizing<Vec<u8>>, SealError> {
+/// Returns the raw state only if the blob is authentic, was sealed under this setup for this user
+/// and has not expired. Every failure is the same error so callers cannot tell the causes apart.
+pub fn open(
+    setup: &[u8],
+    user: &[u8],
+    sealed: &[u8],
+    now: u64,
+) -> Result<Zeroizing<Vec<u8>>, SealError> {
     if sealed.len() <= 1 + NONCE_LEN || sealed[0] != VERSION {
         return Err(SealError);
     }
@@ -84,7 +103,7 @@ pub fn open(setup: &[u8], sealed: &[u8], now: u64) -> Result<Zeroizing<Vec<u8>>,
                 &nonce,
                 Payload {
                     msg: ciphertext,
-                    aad: &[VERSION],
+                    aad: &associated_data(user),
                 },
             )
             .map_err(|_| SealError)?,
@@ -96,7 +115,7 @@ pub fn open(setup: &[u8], sealed: &[u8], now: u64) -> Result<Zeroizing<Vec<u8>>,
     let mut buf = [0u8; EXPIRY_LEN];
     buf.copy_from_slice(expiry);
     let expiry = u64::from_be_bytes(buf);
-    if now > expiry {
+    if now > expiry || expiry - now > STATE_TTL_SECS + MAX_CLOCK_SKEW_SECS {
         return Err(SealError);
     }
     Ok(Zeroizing::new(state.to_vec()))
@@ -108,39 +127,56 @@ mod tests {
 
     const SETUP: &[u8] = b"setup-a";
     const STATE: &[u8] = &[7u8; 192];
+    const USER: &[u8] = b"alice";
 
     #[test]
     fn round_trips_and_hides_the_state() {
-        let sealed = seal(SETUP, STATE, 1_000).unwrap();
+        let sealed = seal(SETUP, USER, STATE, 1_000).unwrap();
         assert!(!sealed.windows(32).any(|w| w == &STATE[..32]));
-        assert_eq!(&*open(SETUP, &sealed, 1_000).unwrap(), STATE);
+        assert_eq!(&*open(SETUP, USER, &sealed, 1_000).unwrap(), STATE);
         assert_ne!(
             sealed,
-            seal(SETUP, STATE, 1_000).unwrap(),
+            seal(SETUP, USER, STATE, 1_000).unwrap(),
             "fresh nonce per seal"
         );
     }
 
     #[test]
     fn rejects_expired_foreign_and_malformed_blobs() {
-        let sealed = seal(SETUP, STATE, 1_000).unwrap();
-        assert!(open(SETUP, &sealed, 1_000 + STATE_TTL_SECS).is_ok());
-        assert!(open(SETUP, &sealed, 1_000 + STATE_TTL_SECS + 1).is_err());
-        assert!(open(b"setup-b", &sealed, 1_000).is_err());
-        assert!(open(SETUP, &[], 1_000).is_err());
-        assert!(open(SETUP, &sealed[..1 + NONCE_LEN], 1_000).is_err());
+        let sealed = seal(SETUP, USER, STATE, 1_000).unwrap();
+        assert!(open(SETUP, USER, &sealed, 1_000 + STATE_TTL_SECS).is_ok());
+        assert!(open(SETUP, USER, &sealed, 1_000 + STATE_TTL_SECS + 1).is_err());
+        assert!(open(b"setup-b", USER, &sealed, 1_000).is_err());
+        assert!(open(SETUP, USER, &[], 1_000).is_err());
+        assert!(open(SETUP, USER, &sealed[..1 + NONCE_LEN], 1_000).is_err());
         let mut wrong_version = sealed.clone();
-        wrong_version[0] = 2;
-        assert!(open(SETUP, &wrong_version, 1_000).is_err());
+        wrong_version[0] = 1; // a version 1 state carries no user binding
+        assert!(open(SETUP, USER, &wrong_version, 1_000).is_err());
+    }
+
+    #[test]
+    fn opens_only_for_the_user_it_was_sealed_for() {
+        let sealed = seal(SETUP, USER, STATE, 1_000).unwrap();
+        assert!(open(SETUP, b"bob", &sealed, 1_000).is_err());
+        assert!(open(SETUP, b"", &sealed, 1_000).is_err());
+        assert!(open(SETUP, b"alice ", &sealed, 1_000).is_err());
+        assert!(open(SETUP, USER, &sealed, 1_000).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_state_sealed_by_a_clock_too_far_ahead() {
+        let sealed = seal(SETUP, USER, STATE, 1_000).unwrap();
+        assert!(open(SETUP, USER, &sealed, 1_000 - MAX_CLOCK_SKEW_SECS).is_ok());
+        assert!(open(SETUP, USER, &sealed, 1_000 - MAX_CLOCK_SKEW_SECS - 1).is_err());
     }
 
     #[test]
     fn any_flipped_bit_is_rejected() {
-        let sealed = seal(SETUP, STATE, 1_000).unwrap();
+        let sealed = seal(SETUP, USER, STATE, 1_000).unwrap();
         for i in 0..sealed.len() {
             let mut tampered = sealed.clone();
             tampered[i] ^= 1;
-            assert!(open(SETUP, &tampered, 1_000).is_err(), "byte {}", i);
+            assert!(open(SETUP, USER, &tampered, 1_000).is_err(), "byte {}", i);
         }
     }
 }

@@ -32,7 +32,10 @@ namespace OPAQUE.Net.Helpers
             }
             catch (InvalidOperationException)
             {
-                // A resolver is already registered for this assembly; keep the default probing.
+                // Someone else registered a resolver for this assembly first. It now decides where the native
+                // library comes from, and the directory restriction above does not apply: say so.
+                System.Diagnostics.Trace.TraceWarning(
+                    "OPAQUE.Net: another DllImport resolver is registered for this assembly; the native library is loaded by it, not from the host-resolved directories.");
             }
         }
 
@@ -58,7 +61,8 @@ namespace OPAQUE.Net.Helpers
             }
 
             directories.Add(AppContext.BaseDirectory);
-            return directories.Distinct().ToList();
+            // A relative entry would be resolved against the current working directory: skip it.
+            return directories.Where(Path.IsPathFullyQualified).Distinct().ToList();
         }
 
         internal static IntPtr Load(string fileName, IReadOnlyList<string> directories)

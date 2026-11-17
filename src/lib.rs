@@ -7,7 +7,7 @@ use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
     CredentialResponse, Identifiers, RegistrationRequest, RegistrationResponse, ServerLogin,
-    ServerLoginStartParameters, ServerRegistration, ServerSetup,
+    ServerLoginStartParameters, ServerRegistration, ServerRegistrationLen, ServerSetup,
 };
 
 use base64::{engine::general_purpose as b64, Engine as _};
@@ -15,7 +15,7 @@ use base64::{engine::general_purpose as b64, Engine as _};
 // defined over 0.14 types, so they cannot be avoided until opaque-ke moves. Scoped to the `Ksf` impl
 // (not crate-wide) so deprecations elsewhere still fail the build.
 #[allow(deprecated)]
-use generic_array::{ArrayLength, GenericArray};
+use generic_array::{typenum::Unsigned, ArrayLength, GenericArray};
 use zeroize::{Zeroize, Zeroizing};
 
 mod csharp;
@@ -79,11 +79,17 @@ impl Ksf for types::CustomKsf {
         mut input: GenericArray<u8, L>,
     ) -> Result<GenericArray<u8, L>, InternalError> {
         let mut output = GenericArray::default();
-        // The Argon2 matrix is not wiped: it is 64 MiB or more, so the allocator returns it to the OS on
-        // free, and zeroing it with volatile writes cost ~25% of the login latency (measured).
-        let result =
-            self.argon
-                .hash_password_into(&input, &[0; argon2::RECOMMENDED_SALT_LEN], &mut output);
+        // The Argon2 matrix holds password-derived state, so it is wiped before it is freed rather than
+        // relying on the allocator returning it to the OS (not guaranteed: musl, jemalloc, Windows
+        // heaps, or a process that reuses it). Costs ~25% of the client's login latency (measured).
+        let mut memory = vec![argon2::Block::default(); self.argon.params().block_count()];
+        let result = self.argon.hash_password_into_with_memory(
+            &input,
+            &[0; argon2::RECOMMENDED_SALT_LEN],
+            &mut output,
+            &mut memory,
+        );
+        memory.zeroize();
         // The input is the OPRF output (a secret); wiping 64 bytes is free.
         input.as_mut_slice().zeroize();
         result.map_err(|_| InternalError::KsfError)?;
@@ -279,21 +285,35 @@ fn internal_create_server_registration_response(
 fn internal_start_server_login(
     params: types::StartServerLoginParams,
 ) -> Result<types::StartServerLoginResult, Error> {
-    let server_setup = decode_server_setup(&params.server_setup)?;
-    let registration_record_bytes = match params.registration_record {
-        Some(pw) => base64_decode(&pw).map(Some),
-        None => Ok(None),
-    }?;
+    let setup_bytes = base64_decode(&params.server_setup)?;
+    let (state, login_response) = start_server_login_raw(&setup_bytes, params)?;
+    Ok(types::StartServerLoginResult {
+        server_login_state: Zeroizing::new(BASE64.encode(&*state)),
+        login_response,
+    })
+}
+
+/// Returns the raw server login state and the encoded response, so the sealed path seals the state
+/// directly instead of decoding the setup twice and round-tripping the state through base64.
+fn start_server_login_raw(
+    setup_bytes: &[u8],
+    params: types::StartServerLoginParams,
+) -> Result<(Zeroizing<Vec<u8>>, String), Error> {
+    let server_setup =
+        ServerSetup::<DefaultCipherSuite>::deserialize(setup_bytes).map_err(protocol_error)?;
     let credential_request_bytes = base64_decode(&params.start_login_request)?;
 
     let mut rng: OsRng = OsRng;
 
-    let registration_record = match registration_record_bytes.as_ref() {
-        Some(bytes) => Some(
-            ServerRegistration::<DefaultCipherSuite>::deserialize(bytes).map_err(protocol_error)?,
-        ),
-        None => None,
-    };
+    // A record that does not decode (corrupt, legacy, placeholder, trailing bytes) takes the same
+    // dummy path as an absent one: failing here instead would tell the client the account exists.
+    let registration_record = params.registration_record.as_ref().and_then(|record| {
+        // Exact length, not serialize(): re-encoding the key would add work only real records do.
+        let bytes = base64_decode(record).ok().filter(|bytes| {
+            bytes.len() == <ServerRegistrationLen<DefaultCipherSuite> as Unsigned>::USIZE
+        })?;
+        ServerRegistration::<DefaultCipherSuite>::deserialize(&bytes).ok()
+    });
 
     let start_params = ServerLoginStartParameters {
         identifiers: get_identifiers(&params.identifiers),
@@ -311,13 +331,10 @@ fn internal_start_server_login(
     .map_err(protocol_error)?;
 
     let login_response = BASE64.encode(server_login_start_result.message.serialize());
-    let server_login_state =
-        Zeroizing::new(BASE64.encode(server_login_start_result.state.serialize()));
-
-    Ok(types::StartServerLoginResult {
-        server_login_state,
-        login_response,
-    })
+    let mut state_bytes = server_login_start_result.state.serialize();
+    let state = Zeroizing::new(state_bytes.to_vec());
+    state_bytes.zeroize();
+    Ok((state, login_response))
 }
 
 fn internal_finish_server_login(
@@ -334,39 +351,44 @@ fn finish_server_login_from_bytes(
     let credential_finalization_bytes = base64_decode(finish_login_request)?;
     let state =
         ServerLogin::<DefaultCipherSuite>::deserialize(state_bytes).map_err(protocol_error)?;
-    let server_login_finish_result = state
+    let mut server_login_finish_result = state
         .finish(
             CredentialFinalization::deserialize(&credential_finalization_bytes)
                 .map_err(protocol_error)?,
         )
         .map_err(protocol_error)?;
-    Ok(Zeroizing::new(
-        BASE64.encode(server_login_finish_result.session_key),
-    ))
+    let session_key = Zeroizing::new(BASE64.encode(&server_login_finish_result.session_key[..]));
+    server_login_finish_result.session_key.zeroize();
+    Ok(session_key)
 }
 
-/// Same as `internal_start_server_login`, but the returned state is sealed under `server_setup`.
+/// Same as `internal_start_server_login`, but the returned state is sealed under `server_setup` and
+/// bound to `user_identifier`.
 fn internal_start_server_login_sealed(
     params: types::StartServerLoginParams,
     now: u64,
 ) -> Result<types::StartServerLoginResult, Error> {
     let setup_bytes = base64_decode(&params.server_setup)?;
-    let mut result = internal_start_server_login(params)?;
-    let raw_state = base64_decode(&result.server_login_state)?;
-    let sealed = seal::seal(&setup_bytes, &raw_state, now).map_err(|_| Error::Ffi)?;
-    result.server_login_state = Zeroizing::new(BASE64.encode(sealed));
-    Ok(result)
+    let user = params.user_identifier.clone();
+    let (state, login_response) = start_server_login_raw(&setup_bytes, params)?;
+    let sealed = seal::seal(&setup_bytes, user.as_bytes(), &state, now).map_err(|_| Error::Ffi)?;
+    Ok(types::StartServerLoginResult {
+        server_login_state: Zeroizing::new(BASE64.encode(sealed)),
+        login_response,
+    })
 }
 
 fn internal_finish_server_login_sealed(
     server_setup: &str,
+    user_identifier: &str,
     sealed_state: &str,
     finish_login_request: &str,
     now: u64,
 ) -> Result<Zeroizing<String>, Error> {
     let setup_bytes = base64_decode(server_setup)?;
     let sealed = base64_decode(sealed_state)?;
-    let state_bytes = seal::open(&setup_bytes, &sealed, now).map_err(|_| Error::Ffi)?;
+    let state_bytes = seal::open(&setup_bytes, user_identifier.as_bytes(), &sealed, now)
+        .map_err(|_| Error::Ffi)?;
     finish_server_login_from_bytes(&state_bytes, finish_login_request)
 }
 
@@ -409,16 +431,19 @@ fn internal_finish_client_login(
 
     // A failed finish (wrong password, wrong identifiers, tampered response) is an expected
     // outcome, reported as an empty result rather than an error so the cause is not exposed.
-    let Ok(client_login_finish_result) = result else {
+    let Ok(mut client_login_finish_result) = result else {
         return Ok(types::FinishClientLoginResult::default());
     };
 
-    Ok(types::FinishClientLoginResult {
+    let finished = types::FinishClientLoginResult {
         finish_login_request: BASE64.encode(client_login_finish_result.message.serialize()),
-        session_key: Zeroizing::new(BASE64.encode(client_login_finish_result.session_key)),
-        export_key: Zeroizing::new(BASE64.encode(client_login_finish_result.export_key)),
+        session_key: Zeroizing::new(BASE64.encode(&client_login_finish_result.session_key[..])),
+        export_key: Zeroizing::new(BASE64.encode(&client_login_finish_result.export_key[..])),
         server_static_public_key: BASE64.encode(client_login_finish_result.server_s_pk.serialize()),
-    })
+    };
+    client_login_finish_result.session_key.zeroize();
+    client_login_finish_result.export_key.zeroize();
+    Ok(finished)
 }
 
 fn internal_start_client_registration(
@@ -464,10 +489,12 @@ fn internal_finish_client_registration(
         )
         .map_err(protocol_error)?;
 
-    let registration_record_bytes = client_finish_registration_result.message.serialize();
+    let mut registration_record_bytes = client_finish_registration_result.message.serialize();
+    let registration_record = Zeroizing::new(BASE64.encode(&registration_record_bytes[..]));
+    registration_record_bytes.zeroize();
 
     Ok(types::FinishClientRegistrationResult {
-        registration_record: BASE64.encode(registration_record_bytes),
+        registration_record,
         export_key: Zeroizing::new(BASE64.encode(client_finish_registration_result.export_key)),
         server_static_public_key: BASE64
             .encode(client_finish_registration_result.server_s_pk.serialize()),
@@ -718,12 +745,17 @@ pub extern "C" fn finish_server_login(
 #[no_mangle]
 pub extern "C" fn finish_server_login_sealed(
     csharp_server_setup: *mut c_char,
+    csharp_user_identifier: *mut c_char,
     csharp_sealed_login_state: *mut c_char,
     csharp_finish_login_request: *mut c_char,
 ) -> *mut c_char {
     csharp::ffi_boundary(
         || {
             let rust_server_setup = ffi_input!(csharp_server_setup, std::ptr::null_mut());
+            let rust_user_identifier = ffi_input!(csharp_user_identifier, std::ptr::null_mut());
+            if rust_user_identifier.len() > MAX_IDENTIFIER_LEN {
+                return std::ptr::null_mut();
+            }
             let rust_sealed_state = ffi_input!(csharp_sealed_login_state, std::ptr::null_mut());
             let rust_finish_login_request =
                 ffi_input!(csharp_finish_login_request, std::ptr::null_mut());
@@ -733,6 +765,7 @@ pub extern "C" fn finish_server_login_sealed(
             };
             if let Ok(result) = internal_finish_server_login_sealed(
                 &rust_server_setup,
+                &rust_user_identifier,
                 &rust_sealed_state,
                 &rust_finish_login_request,
                 now,
@@ -1029,7 +1062,7 @@ mod tests {
         .unwrap();
         Registered {
             setup,
-            record: finish.registration_record,
+            record: finish.registration_record.to_string(),
             export_key: finish.export_key,
         }
     }
@@ -1120,6 +1153,22 @@ mod tests {
         assert!(!server.login_response.is_empty());
         let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
         assert!(client.session_key.is_empty());
+    }
+
+    #[test]
+    fn undecodable_record_looks_like_an_unknown_user() {
+        let reg = register(PASSWORD);
+        let start = internal_start_client_login(z(PASSWORD)).ok().unwrap();
+        let truncated = &reg.record[..reg.record.len() / 2];
+        let trailing = format!("{}AAAA", reg.record);
+        for record in ["-", "null", " ", truncated, &trailing] {
+            let server = server_start(&reg, &start.start_login_request, Some(record))
+                .ok()
+                .unwrap();
+            assert!(!server.login_response.is_empty());
+            let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
+            assert!(client.session_key.is_empty());
+        }
     }
 
     #[test]
@@ -1294,6 +1343,7 @@ mod tests {
 
         let key = internal_finish_server_login_sealed(
             &reg.setup,
+            USER,
             &server.server_login_state,
             &client.finish_login_request,
             1_000,
@@ -1314,7 +1364,13 @@ mod tests {
         let server = sealed_start(&reg, &start.start_login_request, 1_000);
         let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
         let finish = |setup: &str, state: &str, now: u64| {
-            internal_finish_server_login_sealed(setup, state, &client.finish_login_request, now)
+            internal_finish_server_login_sealed(
+                setup,
+                USER,
+                state,
+                &client.finish_login_request,
+                now,
+            )
         };
 
         assert!(finish(
@@ -1330,6 +1386,15 @@ mod tests {
         )
         .is_err());
         assert!(finish(&other.setup, &server.server_login_state, 1_000).is_err());
+        // A valid state and finish message of USER do not complete a login for anyone else.
+        assert!(internal_finish_server_login_sealed(
+            &reg.setup,
+            "victim@example.test",
+            &server.server_login_state,
+            &client.finish_login_request,
+            1_000
+        )
+        .is_err());
 
         let mut bytes = BASE64.decode(&*server.server_login_state).unwrap();
         let mid = bytes.len() / 2;

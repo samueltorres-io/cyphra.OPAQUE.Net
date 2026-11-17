@@ -49,6 +49,17 @@ namespace OPAQUE.Net.Types.Exceptions
             }
         }
 
+        /// <summary>
+        /// NUL-terminated UTF-8 for a secret argument. A <c>byte[]</c> parameter is pinned and passed as is, so
+        /// unlike <c>LPUTF8Str</c> no unmanaged copy is left unwiped: zero the array after the call.
+        /// </summary>
+        public static byte[] ToNativeUtf8(string value)
+        {
+            byte[] bytes = new byte[StrictUtf8.GetByteCount(value) + 1];
+            StrictUtf8.GetBytes(value, bytes);
+            return bytes;
+        }
+
         private static ArgumentOutOfRangeException TooLong(string paramName, int maximumBytes) =>
             new(paramName, $"Parameter '{paramName}' exceeds the maximum length of {maximumBytes} UTF-8 bytes.");
     }

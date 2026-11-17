@@ -12,7 +12,8 @@ namespace OPAQUE.Net.Types.Handles
         {
             try
             {
-                return GetValue();
+                // NULL is the native side's failure result: never pass it to the getters.
+                return IsInvalid ? default : GetValue();
             }
             finally
             {

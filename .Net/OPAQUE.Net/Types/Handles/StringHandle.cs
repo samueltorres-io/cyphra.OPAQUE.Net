@@ -22,13 +22,15 @@ namespace OPAQUE.Net.Types.Handles
                 return string.Empty;
             }
 
+            // Same inclusive limit as the native side and ParamGuard: up to MaximumNativeStringLength bytes
+            // before the NUL.
             int len = 0;
-            while (len < MaximumNativeStringLength && Marshal.ReadByte(handle, len) != 0)
+            while (len <= MaximumNativeStringLength && Marshal.ReadByte(handle, len) != 0)
             {
                 ++len;
             }
 
-            if (len == MaximumNativeStringLength)
+            if (len > MaximumNativeStringLength)
             {
                 throw new InvalidOperationException("Native string is not NUL-terminated within the supported maximum length.");
             }

@@ -10,6 +10,7 @@
         /// <see cref="OpaqueServer.FinishLogin(string, string, out string?)"/> at most once and delete it
         /// afterwards. Only <see cref="LoginResponse"/> goes to the client.
         /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
         public string ServerLoginState { get; private set; }
         /// <summary>The only value of this result that is sent to the client.</summary>
         public string LoginResponse { get; private set; }
@@ -19,5 +20,7 @@
             ServerLoginState = serverLoginState;
             LoginResponse = loginResponse;
         }
+
+        public override string ToString() => nameof(StartServerLoginResult);
     }
 }

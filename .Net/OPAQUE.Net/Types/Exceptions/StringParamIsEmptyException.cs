@@ -1,11 +1,12 @@
 ﻿namespace OPAQUE.Net.Types.Exceptions
 {
-    public class StringParamIsEmptyException : Exception
+    // An ArgumentException like every other argument check, so one catch covers them all.
+    public class StringParamIsEmptyException : ArgumentException
     {
         public const int MaximumPasswordLength = ParamGuard.MaximumPasswordLength;
         public const int MaximumIdentifierLength = ParamGuard.MaximumIdentifierLength;
         public const int MaximumProtocolMessageLength = ParamGuard.MaximumProtocolMessageLength;
-        public StringParamIsEmptyException(string paramName) : base($"Parameter '{paramName}' can not be an empty string") { }
+        public StringParamIsEmptyException(string paramName) : base($"Parameter '{paramName}' can not be an empty string", paramName) { }
 
         public static void ThrowIfEmpty(string value, string paramName)
         {
