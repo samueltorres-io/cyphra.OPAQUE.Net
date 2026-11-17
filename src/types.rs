@@ -138,11 +138,6 @@ pub extern "C" fn free_start_server_login_result(ptr: *mut StartServerLoginResul
     release_result_handle(ptr);
 }
 
-pub struct FinishServerLoginParams {
-    pub server_login_state: Zeroizing<String>,
-    pub finish_login_request: Zeroizing<String>,
-}
-
 #[derive(Default)]
 pub struct StartClientLoginResult {
     pub client_login_state: Zeroizing<String>,

@@ -114,7 +114,7 @@ namespace OPAQUE.Net
         /// Finishes the login process for the client
         /// </summary>
         /// <param name="clientLoginState"><see cref="StartClientLoginResult.ClientLoginState"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
-        /// <param name="serverLoginResponse"><see cref="StartServerLoginResult.LoginResponse"/> from <see cref="OpaqueServer.StartLogin(string, string, string, string?, string?, string?, out StartServerLoginResult?, out Exception?)"/></param>
+        /// <param name="serverLoginResponse"><see cref="StartSealedServerLoginResult.LoginResponse"/> from <see cref="OpaqueServer.StartSealedLogin(string, string, string, string?, string?, string?, out StartSealedServerLoginResult?, out Exception?)"/></param>
         /// <param name="password">Users's current password</param>
         /// <param name="result">A <see cref="FinishClientLoginResult"/> filled with data if successful</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
@@ -127,7 +127,7 @@ namespace OPAQUE.Net
         /// Finishes the login process for the client
         /// </summary>
         /// <param name="clientLoginState"><see cref="StartClientLoginResult.ClientLoginState"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
-        /// <param name="serverLoginResponse"><see cref="StartServerLoginResult.LoginResponse"/> from <see cref="OpaqueServer.StartLogin(string, string, string, string?, string?, string?, out StartServerLoginResult?, out Exception?)"/></param>
+        /// <param name="serverLoginResponse"><see cref="StartSealedServerLoginResult.LoginResponse"/> from <see cref="OpaqueServer.StartSealedLogin(string, string, string, string?, string?, string?, out StartSealedServerLoginResult?, out Exception?)"/></param>
         /// <param name="password">Users's current password</param>
         /// <param name="clientIdentifier">Current client identifier</param>
         /// <param name="serverIdentifier">Current server identifier</param>

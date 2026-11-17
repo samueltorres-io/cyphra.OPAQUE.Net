@@ -22,7 +22,6 @@ Every string argument, including protocol messages received from the other party
 - `CreateRegistrationResponse(serverSetup, userIdentifier, registrationRequest, out response)` processes client registration.
 - `StartSealedLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, out result, out exception)` starts server login, returns the server state sealed under the setup. Its `exception` is set only when the managed call into the native library throws; native failures (an undecodable setup, a clock before 1970, a sealing error) return `false` with `exception` null, like a protocol failure, so validate `serverSetup` once at startup with `GetPublicKey`. The extended overload accepts `clientIdentifier` and `serverIdentifier`.
 - `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)` completes login once. It fails for a state that was altered, expired (2 minutes), sealed under another setup, or started for another `userIdentifier`, so a success authenticates exactly that user. The overloads without `userIdentifier` are obsolete (compile error) and throw `NotSupportedException`.
-- `StartLogin` / `FinishLogin(serverLoginState, …)` are obsolete: the raw state they use is a bearer secret (see [security](security.md)).
 
 ## `LoginStateReplayCache`
 
@@ -36,10 +35,9 @@ Every string argument, including protocol messages received from the other party
 | `FinishClientRegistrationResult` | `RegistrationRecord`, `ExportKey`, `ServerStaticPublicKey` |
 | `StartClientLoginResult` | `ClientLoginState`, `StartLoginRequest` |
 | `StartSealedServerLoginResult` | `SealedLoginState`, `LoginResponse` |
-| `StartServerLoginResult` (obsolete) | `ServerLoginState`, `LoginResponse` |
 | `FinishClientLoginResult` | `FinishLoginRequest`, `SessionKey`, `ExportKey`, `ServerStaticPublicKey` |
 
-The result types override `ToString()` to print only their type name, but their properties are plain strings: never serialize a result object, log it field by field, or keep it longer than the step that needs it. Send only `LoginResponse` to the client. `SealedLoginState` is valid for two minutes but not single-use by itself: `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)` refuses a second use. `tryConsume` receives a stable id of the state and must atomically record it and return true only the first time (shared storage such as Redis `SET NX` with a TTL of at least 120 s for several instances; `LoginStateReplayCache.TryConsume` for a single instance). It runs only after the state and the finish message verify, so a bad finish does not burn the state. The raw `ServerLoginState` of the obsolete API is a server-side secret (see [security](security.md)). The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
+The result types override `ToString()` to print only their type name, but their properties are plain strings: never serialize a result object, log it field by field, or keep it longer than the step that needs it. Send only `LoginResponse` to the client. `SealedLoginState` is valid for two minutes and `FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey)` refuses a second use. `tryConsume` receives a stable id of the state and must atomically record it and return true only the first time (shared storage such as Redis `SET NX` with a TTL of at least 120 s for several instances; `LoginStateReplayCache.TryConsume` for a single instance). It runs only after the state and the finish message verify, so a bad finish does not burn the state. The state and request properties are flow-specific. Do not reuse them across users, attempts, or concurrent operations.
 
 ## `KSFConfig`
 

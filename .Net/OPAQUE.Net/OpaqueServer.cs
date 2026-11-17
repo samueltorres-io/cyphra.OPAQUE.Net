@@ -77,90 +77,9 @@ namespace OPAQUE.Net
         }
 
         /// <summary>
-        /// Starts the login process for the server
-        /// </summary>
-        /// <param name="serverSetup">String from <see cref="OpaqueServer.CreateSetup(out string?)"/></param>
-        /// <param name="startLoginRequest"><see cref="StartClientLoginResult.StartLoginRequest"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
-        /// <param name="userIdentifier">Current user identifier</param>
-        /// <param name="registrationRecord"><see cref="FinishClientRegistrationResult.RegistrationRecord"/> from <see cref="OpaqueClient.FinishRegistration(string, string, string, string?, string?, OPAQUE.Net.Types.Parameters.KSFConfig, out FinishClientRegistrationResult?)"/></param>
-        /// <param name="result">A <see cref="StartServerLoginResult"/> filled with data if successful</param>
-        /// <param name="e">An exception thrown while calling into the native library (for example a marshalling fault).
-        /// Native failures, including an undecodable <paramref name="serverSetup"/>, a clock before 1970 or a sealing
-        /// error, return false with this null, like a protocol failure; validate the setup once at startup with
-        /// <see cref="GetPublicKey(string, out string?)"/>.</param>
-        /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
-        [Obsolete("The raw ServerLoginState is a bearer secret: anyone holding it can finish the login without the password. Use StartSealedLogin/FinishSealedLogin.")]
-        public bool StartLogin(string serverSetup, string startLoginRequest, string userIdentifier, string? registrationRecord, out StartServerLoginResult? result, out Exception? e)
-        {
-            return StartLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, "", "", out result, out e);
-        }
-
-        /// <summary>
-        /// Starts the login process for the server
-        /// </summary>
-        /// <param name="serverSetup">String from <see cref="OpaqueServer.CreateSetup(out string?)"/></param>
-        /// <param name="startLoginRequest"><see cref="StartClientLoginResult.StartLoginRequest"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
-        /// <param name="userIdentifier">Current user identifier</param>
-        /// <param name="registrationRecord"><see cref="FinishClientRegistrationResult.RegistrationRecord"/> from <see cref="OpaqueClient.FinishRegistration(string, string, string, string?, string?, OPAQUE.Net.Types.Parameters.KSFConfig, out FinishClientRegistrationResult?)"/></param>
-        /// <param name="clientIdentity">Current client identifier</param>
-        /// <param name="serverIdentity">Current server identifier</param>
-        /// <param name="result">A <see cref="StartServerLoginResult"/> filled with data if successful</param>
-        /// <param name="e">An exception thrown while calling into the native library (for example a marshalling fault).
-        /// Native failures, including an undecodable <paramref name="serverSetup"/>, a clock before 1970 or a sealing
-        /// error, return false with this null, like a protocol failure; validate the setup once at startup with
-        /// <see cref="GetPublicKey(string, out string?)"/>.</param>
-        /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
-        [Obsolete("The raw ServerLoginState is a bearer secret: anyone holding it can finish the login without the password. Use StartSealedLogin/FinishSealedLogin.")]
-        public bool StartLogin(string serverSetup, string startLoginRequest, string userIdentifier, 
-            string? registrationRecord, string? clientIdentity, string? serverIdentity, out StartServerLoginResult? result, out Exception? e)
-        {
-            StringParamIsEmptyException.ThrowIfEmpty(serverSetup, nameof(serverSetup));
-            StringParamIsEmptyException.ThrowIfEmpty(startLoginRequest, nameof(startLoginRequest));
-            StringParamIsEmptyException.ThrowIfEmpty(userIdentifier, nameof(userIdentifier));
-            ParamGuard.ThrowIfInvalid(serverSetup, ParamGuard.MaximumProtocolMessageLength, nameof(serverSetup));
-            ParamGuard.ThrowIfInvalid(startLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(startLoginRequest));
-            ParamGuard.ThrowIfInvalid(userIdentifier, ParamGuard.MaximumIdentifierLength, nameof(userIdentifier));
-            ParamGuard.ThrowIfInvalid(registrationRecord, ParamGuard.MaximumProtocolMessageLength, nameof(registrationRecord));
-            ParamGuard.ThrowIfInvalid(clientIdentity, ParamGuard.MaximumIdentifierLength, nameof(clientIdentity));
-            ParamGuard.ThrowIfInvalid(serverIdentity, ParamGuard.MaximumIdentifierLength, nameof(serverIdentity));
-
-            byte[] setup = ParamGuard.ToNativeUtf8(serverSetup);
-            try
-            {
-                result = FunctionHelper.TryExecute(() => start_server_login(setup, startLoginRequest,
-                    userIdentifier, registrationRecord ?? "", clientIdentity ?? "", serverIdentity ?? "")?.GetAndRelease(), out e);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(setup);
-            }
-
-            return result != null;
-        }
-
-        /// <summary>
-        /// Finishes the login process for the server
-        /// </summary>
-        /// <param name="serverLoginState"><see cref="StartServerLoginResult.ServerLoginState"/> from <see cref="OpaqueServer.StartLogin(string, string, string, string?, string?, string?, out StartServerLoginResult?, out Exception?)"/></param>
-        /// <param name="finishLoginRequest"><see cref="FinishClientLoginResult.FinishLoginRequest"/> from <see cref="OpaqueClient.FinishLogin(string, string, string, string?, string?, OPAQUE.Net.Types.Parameters.KSFConfig, out FinishClientLoginResult?)"/></param>
-        /// <param name="serverSessionKey">The generated session key</param>
-        /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
-        [Obsolete("The raw ServerLoginState is a bearer secret: anyone holding it can finish the login without the password. Use StartSealedLogin/FinishSealedLogin.")]
-        public bool FinishLogin(string serverLoginState, string finishLoginRequest, out string? serverSessionKey)
-        {
-            StringParamIsEmptyException.ThrowIfEmpty(serverLoginState, nameof(serverLoginState));
-            StringParamIsEmptyException.ThrowIfEmpty(finishLoginRequest, nameof(finishLoginRequest));
-            ParamGuard.ThrowIfInvalid(serverLoginState, ParamGuard.MaximumProtocolMessageLength, nameof(serverLoginState));
-            ParamGuard.ThrowIfInvalid(finishLoginRequest, ParamGuard.MaximumProtocolMessageLength, nameof(finishLoginRequest));
-
-            serverSessionKey = FunctionHelper.TryExecute(() => finish_server_login(serverLoginState, finishLoginRequest)?.GetAndRelease());
-            return !string.IsNullOrEmpty(serverSessionKey);
-        }
-
-        /// <summary>
         /// Starts the login process for the server and returns the server state sealed under
-        /// <paramref name="serverSetup"/>. Prefer this over <c>StartLogin</c>: the raw state is a bearer
-        /// secret, the sealed one is not. All instances serving the same users must share the setup.
+        /// <paramref name="serverSetup"/> and bound to <paramref name="userIdentifier"/>. All instances serving
+        /// the same users must share the setup.
         /// </summary>
         /// <param name="serverSetup">String from <see cref="OpaqueServer.CreateSetup(out string?)"/></param>
         /// <param name="startLoginRequest"><see cref="StartClientLoginResult.StartLoginRequest"/> from the client</param>
@@ -206,11 +125,10 @@ namespace OPAQUE.Net
             ParamGuard.ThrowIfInvalid(clientIdentity, ParamGuard.MaximumIdentifierLength, nameof(clientIdentity));
             ParamGuard.ThrowIfInvalid(serverIdentity, ParamGuard.MaximumIdentifierLength, nameof(serverIdentity));
 
-            StartServerLoginResult? started;
             byte[] setup = ParamGuard.ToNativeUtf8(serverSetup);
             try
             {
-                started = FunctionHelper.TryExecute(() => start_server_login_sealed(setup, startLoginRequest,
+                result = FunctionHelper.TryExecute(() => start_server_login_sealed(setup, startLoginRequest,
                     userIdentifier, registrationRecord ?? "", clientIdentity ?? "", serverIdentity ?? "")?.GetAndRelease(), out e);
             }
             finally
@@ -218,7 +136,6 @@ namespace OPAQUE.Net
                 CryptographicOperations.ZeroMemory(setup);
             }
 
-            result = started == null ? null : new StartSealedServerLoginResult(started.ServerLoginState, started.LoginResponse);
             return result != null;
         }
 
@@ -235,8 +152,7 @@ namespace OPAQUE.Net
 
         /// <summary>
         /// Finishes the login process for the server from a sealed state, once. Fails (false) for a state that
-        /// was tampered with, expired, produced under another setup or for another user, or that is a raw legacy
-        /// state. After the state and the client's finish message verify, <paramref name="tryConsume"/> is called
+        /// was tampered with, expired, or produced under another setup or for another user. After the state and the client's finish message verify, <paramref name="tryConsume"/> is called
         /// once with a stable identifier of the state (SHA-256 hex of the sealed value). It must atomically record
         /// the identifier and return true only the first time it sees it; on false the login fails and no key is
         /// returned. Back it with storage shared by all instances (e.g. Redis <c>SET NX</c> with a TTL of at
@@ -305,15 +221,10 @@ namespace OPAQUE.Net
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StringHandle create_server_registration_response(byte[] serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string userIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string registrationRequest);
 
-        [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StartServerLoginResultHandle start_server_login(byte[] serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string startLoginRequest,
-            [MarshalAs(UnmanagedType.LPUTF8Str)] string userIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? registrationRecord, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentity, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentity);
+
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StringHandle finish_server_login([MarshalAs(UnmanagedType.LPUTF8Str)] string serverLoginState, [MarshalAs(UnmanagedType.LPUTF8Str)] string finishLoginRequest);
-
-        [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
-        private static extern StartServerLoginResultHandle start_server_login_sealed(byte[] serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string startLoginRequest,
+        private static extern StartSealedServerLoginResultHandle start_server_login_sealed(byte[] serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string startLoginRequest,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string userIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string? registrationRecord, [MarshalAs(UnmanagedType.LPUTF8Str)] string? clientIdentity, [MarshalAs(UnmanagedType.LPUTF8Str)] string? serverIdentity);
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]

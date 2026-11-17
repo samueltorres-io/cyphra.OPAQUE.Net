@@ -282,19 +282,8 @@ fn internal_create_server_registration_response(
     Ok(BASE64.encode(registration_response_bytes))
 }
 
-fn internal_start_server_login(
-    params: types::StartServerLoginParams,
-) -> Result<types::StartServerLoginResult, Error> {
-    let setup_bytes = base64_decode(&params.server_setup)?;
-    let (state, login_response) = start_server_login_raw(&setup_bytes, params)?;
-    Ok(types::StartServerLoginResult {
-        server_login_state: Zeroizing::new(BASE64.encode(&*state)),
-        login_response,
-    })
-}
-
-/// Returns the raw server login state and the encoded response, so the sealed path seals the state
-/// directly instead of decoding the setup twice and round-tripping the state through base64.
+/// Returns the raw server login state and the encoded response. The state is a bearer secret (it
+/// finishes the login without the password), so it never leaves this crate unsealed.
 fn start_server_login_raw(
     setup_bytes: &[u8],
     params: types::StartServerLoginParams,
@@ -337,13 +326,6 @@ fn start_server_login_raw(
     Ok((state, login_response))
 }
 
-fn internal_finish_server_login(
-    params: types::FinishServerLoginParams,
-) -> Result<Zeroizing<String>, Error> {
-    let state_bytes = base64_decode(&params.server_login_state)?;
-    finish_server_login_from_bytes(&state_bytes, &params.finish_login_request)
-}
-
 fn finish_server_login_from_bytes(
     state_bytes: &[u8],
     finish_login_request: &str,
@@ -362,8 +344,7 @@ fn finish_server_login_from_bytes(
     Ok(session_key)
 }
 
-/// Same as `internal_start_server_login`, but the returned state is sealed under `server_setup` and
-/// bound to `user_identifier`.
+/// Starts the server login and seals the state under `server_setup`, bound to `user_identifier`.
 fn internal_start_server_login_sealed(
     params: types::StartServerLoginParams,
     now: u64,
@@ -616,8 +597,8 @@ pub extern "C" fn create_server_registration_response(
     )
 }
 
-fn start_server_login_impl(
-    sealed: bool,
+#[no_mangle]
+pub extern "C" fn start_server_login_sealed(
     csharp_server_setup: *mut c_char,
     csharp_start_login_request: *mut c_char,
     csharp_user_identifier: *mut c_char,
@@ -657,86 +638,14 @@ fn start_server_login_impl(
                 user_identifier: String::clone(&rust_user_identifier),
                 identifiers,
             };
-            let started = if sealed {
-                match seal::unix_now() {
-                    Ok(now) => internal_start_server_login_sealed(params, now),
-                    Err(_) => {
-                        return types::into_result_handle(types::StartServerLoginResult::default())
-                    }
-                }
-            } else {
-                internal_start_server_login(params)
-            };
+            let started = seal::unix_now()
+                .map_err(|_| Error::Ffi)
+                .and_then(|now| internal_start_server_login_sealed(params, now));
             if let Ok(result) = started {
                 return types::into_result_handle(result);
             }
 
             types::into_result_handle(types::StartServerLoginResult::default())
-        },
-        std::ptr::null_mut(),
-    )
-}
-
-#[no_mangle]
-pub extern "C" fn start_server_login(
-    csharp_server_setup: *mut c_char,
-    csharp_start_login_request: *mut c_char,
-    csharp_user_identifier: *mut c_char,
-    csharp_registration_record: *mut c_char,
-    csharp_client_identifier: *mut c_char,
-    csharp_server_identifier: *mut c_char,
-) -> *mut types::StartServerLoginResult {
-    start_server_login_impl(
-        false,
-        csharp_server_setup,
-        csharp_start_login_request,
-        csharp_user_identifier,
-        csharp_registration_record,
-        csharp_client_identifier,
-        csharp_server_identifier,
-    )
-}
-
-#[no_mangle]
-pub extern "C" fn start_server_login_sealed(
-    csharp_server_setup: *mut c_char,
-    csharp_start_login_request: *mut c_char,
-    csharp_user_identifier: *mut c_char,
-    csharp_registration_record: *mut c_char,
-    csharp_client_identifier: *mut c_char,
-    csharp_server_identifier: *mut c_char,
-) -> *mut types::StartServerLoginResult {
-    start_server_login_impl(
-        true,
-        csharp_server_setup,
-        csharp_start_login_request,
-        csharp_user_identifier,
-        csharp_registration_record,
-        csharp_client_identifier,
-        csharp_server_identifier,
-    )
-}
-
-#[no_mangle]
-pub extern "C" fn finish_server_login(
-    csharp_server_login_state: *mut c_char,
-    csharp_finish_login_request: *mut c_char,
-) -> *mut c_char {
-    csharp::ffi_boundary(
-        || {
-            let rust_server_login_state =
-                ffi_input!(csharp_server_login_state, std::ptr::null_mut());
-            let rust_finish_login_request =
-                ffi_input!(csharp_finish_login_request, std::ptr::null_mut());
-
-            if let Ok(result) = internal_finish_server_login(types::FinishServerLoginParams {
-                server_login_state: rust_server_login_state,
-                finish_login_request: rust_finish_login_request,
-            }) {
-                return csharp::rust_string_to_csharp_string_handle(&result);
-            }
-
-            csharp::rust_string_to_csharp_string_handle("")
         },
         std::ptr::null_mut(),
     )
@@ -1021,6 +930,7 @@ mod tests {
 
     const USER: &str = "user@example.test";
     const PASSWORD: &str = "correct horse battery staple";
+    const NOW: u64 = 1_000;
 
     fn z(s: &str) -> Zeroizing<String> {
         Zeroizing::new(s.to_owned())
@@ -1072,13 +982,16 @@ mod tests {
         request: &str,
         record: Option<&str>,
     ) -> JsResult<types::StartServerLoginResult> {
-        internal_start_server_login(types::StartServerLoginParams {
-            server_setup: z(&reg.setup),
-            registration_record: record.map(z),
-            start_login_request: z(request),
-            user_identifier: USER.to_owned(),
-            identifiers: None,
-        })
+        internal_start_server_login_sealed(
+            types::StartServerLoginParams {
+                server_setup: z(&reg.setup),
+                registration_record: record.map(z),
+                start_login_request: z(request),
+                user_identifier: USER.to_owned(),
+                identifiers: None,
+            },
+            NOW,
+        )
     }
 
     fn client_finish(
@@ -1097,11 +1010,12 @@ mod tests {
         .unwrap()
     }
 
-    fn server_finish(state: &str, finalization: &str) -> JsResult<Zeroizing<String>> {
-        internal_finish_server_login(types::FinishServerLoginParams {
-            server_login_state: z(state),
-            finish_login_request: z(finalization),
-        })
+    fn server_finish(
+        reg: &Registered,
+        state: &str,
+        finalization: &str,
+    ) -> JsResult<Zeroizing<String>> {
+        internal_finish_server_login_sealed(&reg.setup, USER, state, finalization, NOW)
     }
 
     #[test]
@@ -1115,9 +1029,13 @@ mod tests {
 
         assert!(!client.finish_login_request.is_empty());
         assert_eq!(*client.export_key, *reg.export_key);
-        let server_key = server_finish(&server.server_login_state, &client.finish_login_request)
-            .ok()
-            .unwrap();
+        let server_key = server_finish(
+            &reg,
+            &server.server_login_state,
+            &client.finish_login_request,
+        )
+        .ok()
+        .unwrap();
         assert_eq!(*server_key, *client.session_key);
     }
 
@@ -1186,9 +1104,12 @@ mod tests {
         let (_server_b, client_b) = run();
 
         // Replay / cross-session: B's finalization must not complete A's login.
-        assert!(
-            server_finish(&server_a.server_login_state, &client_b.finish_login_request).is_err()
-        );
+        assert!(server_finish(
+            &reg,
+            &server_a.server_login_state,
+            &client_b.finish_login_request
+        )
+        .is_err());
     }
 
     #[test]
@@ -1209,6 +1130,7 @@ mod tests {
 
         // Flipped finalization MAC.
         assert!(server_finish(
+            &reg,
             &server.server_login_state,
             &flip(&client.finish_login_request)
         )
@@ -1238,7 +1160,7 @@ mod tests {
             let g = BASE64.encode(&garbage);
             assert!(server_start(&reg, &g, Some(&reg.record)).is_err());
             assert!(server_start(&reg, &g, Some(&g)).is_err());
-            assert!(server_finish(&g, &g).is_err());
+            assert!(server_finish(&reg, &g, &g).is_err());
             assert!(internal_get_server_public_key(&g).is_err());
             assert!(
                 internal_finish_client_login(types::FinishClientLoginParams {
@@ -1276,8 +1198,8 @@ mod tests {
         assert!(start_client_login(null).is_null());
         assert!(get_server_public_key(null).is_null());
         assert!(create_server_registration_response(null, null, null).is_null());
-        assert!(start_server_login(null, null, null, null, null, null).is_null());
-        assert!(finish_server_login(null, null).is_null());
+        assert!(start_server_login_sealed(null, null, null, null, null, null).is_null());
+        assert!(finish_server_login_sealed(null, null, null, null).is_null());
         assert!(
             finish_client_login(null, null, null, null, null, null, null, null, null).is_null()
         );
@@ -1319,49 +1241,14 @@ mod tests {
         assert!(call(&bytes).is_err());
     }
 
-    fn sealed_start(reg: &Registered, request: &str, now: u64) -> types::StartServerLoginResult {
-        internal_start_server_login_sealed(
-            types::StartServerLoginParams {
-                server_setup: z(&reg.setup),
-                registration_record: Some(z(&reg.record)),
-                start_login_request: z(request),
-                user_identifier: USER.to_owned(),
-                identifiers: None,
-            },
-            now,
-        )
-        .ok()
-        .unwrap()
-    }
-
-    #[test]
-    fn sealed_login_round_trips_and_is_not_a_usable_raw_state() {
-        let reg = register(PASSWORD);
-        let start = internal_start_client_login(z(PASSWORD)).ok().unwrap();
-        let server = sealed_start(&reg, &start.start_login_request, 1_000);
-        let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
-
-        let key = internal_finish_server_login_sealed(
-            &reg.setup,
-            USER,
-            &server.server_login_state,
-            &client.finish_login_request,
-            1_000,
-        )
-        .ok()
-        .unwrap();
-        assert_eq!(*key, *client.session_key);
-
-        // The sealed blob is not a raw state: the legacy path must refuse it.
-        assert!(server_finish(&server.server_login_state, &client.finish_login_request).is_err());
-    }
-
     #[test]
     fn sealed_login_rejects_expired_foreign_setup_and_tampered_state() {
         let reg = register(PASSWORD);
         let other = register(PASSWORD);
         let start = internal_start_client_login(z(PASSWORD)).ok().unwrap();
-        let server = sealed_start(&reg, &start.start_login_request, 1_000);
+        let server = server_start(&reg, &start.start_login_request, Some(&reg.record))
+            .ok()
+            .unwrap();
         let client = client_finish(&start.client_login_state, &server.login_response, PASSWORD);
         let finish = |setup: &str, state: &str, now: u64| {
             internal_finish_server_login_sealed(
