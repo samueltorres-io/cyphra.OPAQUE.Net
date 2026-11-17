@@ -13,7 +13,7 @@ namespace OPAQUE.Net
         /// <summary>
         /// Starts the registration process
         /// </summary>
-        /// <param name="password">User's Password</param>
+        /// <param name="password">User's password</param>
         /// <param name="result">A <see cref="StartClientRegistrationResult"/> filled with data if successful</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool StartRegistration(string password, out StartClientRegistrationResult? result)
@@ -35,7 +35,7 @@ namespace OPAQUE.Net
         /// <summary>
         /// Finishes the registration process for the client side
         /// </summary>
-        /// <param name="password">Users's Password</param>
+        /// <param name="password">User's password</param>
         /// <param name="registrationResponse">Out parameter from <see cref="OpaqueServer.CreateRegistrationResponse(string, string, string, out string?)"/></param>
         /// <param name="clientRegistrationState"><see cref="StartClientRegistrationResult.ClientRegistrationState"/> from <see cref="OpaqueClient.StartRegistration(string, out StartClientRegistrationResult?)"/></param>
         /// <param name="result">A <see cref="FinishClientRegistrationResult"/> filled with data if successful</param>
@@ -48,7 +48,7 @@ namespace OPAQUE.Net
         /// <summary>
         /// Finishes the registration process for the client side
         /// </summary>
-        /// <param name="password">Users's Password</param>
+        /// <param name="password">User's password</param>
         /// <param name="registrationResponse">Out parameter from <see cref="OpaqueServer.CreateRegistrationResponse(string, string, string, out string?)"/></param>
         /// <param name="clientRegistrationState"><see cref="StartClientRegistrationResult.ClientRegistrationState"/> from <see cref="OpaqueClient.StartRegistration(string, out StartClientRegistrationResult?)"/></param>
         /// <param name="clientIdentifier">Current client identifier</param>
@@ -84,7 +84,7 @@ namespace OPAQUE.Net
         /// <summary>
         /// Starts the login process
         /// </summary>
-        /// <param name="password">Users's current password</param>
+        /// <param name="password">User's current password</param>
         /// <param name="result">A <see cref="StartClientLoginResult"/> filled with data if successful</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool StartLogin(string password, out StartClientLoginResult? result)
@@ -108,7 +108,7 @@ namespace OPAQUE.Net
         /// </summary>
         /// <param name="clientLoginState"><see cref="StartClientLoginResult.ClientLoginState"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
         /// <param name="serverLoginResponse"><see cref="StartSealedServerLoginResult.LoginResponse"/> from <see cref="OpaqueServer.StartSealedLogin(string, string, string, string?, string?, string?, out StartSealedServerLoginResult?, out Exception?)"/></param>
-        /// <param name="password">Users's current password</param>
+        /// <param name="password">User's current password</param>
         /// <param name="result">A <see cref="FinishClientLoginResult"/> filled with data if successful</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool FinishLogin(string clientLoginState, string serverLoginResponse, string password, out FinishClientLoginResult? result)
@@ -121,7 +121,7 @@ namespace OPAQUE.Net
         /// </summary>
         /// <param name="clientLoginState"><see cref="StartClientLoginResult.ClientLoginState"/> from <see cref="OpaqueClient.StartLogin(string, out StartClientLoginResult?)"/></param>
         /// <param name="serverLoginResponse"><see cref="StartSealedServerLoginResult.LoginResponse"/> from <see cref="OpaqueServer.StartSealedLogin(string, string, string, string?, string?, string?, out StartSealedServerLoginResult?, out Exception?)"/></param>
-        /// <param name="password">Users's current password</param>
+        /// <param name="password">User's current password</param>
         /// <param name="clientIdentifier">Current client identifier</param>
         /// <param name="serverIdentifier">Current server identifier</param>
         /// <param name="result">A <see cref="FinishClientLoginResult"/> filled with data if successful</param>

@@ -5,7 +5,7 @@
 ignore = [
   # crypto-bigint 0.5.5 timing variability, only via elliptic-curve 0.13 pinned by opaque-ke 3.x
   # (affects only the optional `p256` feature). Remove once opaque-ke moves to elliptic-curve 0.14.
-  # See docs/security.md.
+  # See docs/security/secure-use.md.
   "RUSTSEC-2026-0387",
 ]
 

@@ -2,25 +2,14 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-// Defense in depth for CA5392: the resolver below normally loads the library. Should it ever not run,
-// the runtime's own probing is limited to the assembly directory instead of the wider default.
 [assembly: DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
 
 namespace OPAQUE.Net.Helpers
 {
-    /// <summary>
-    /// Loads the native library only from the directories the .NET host itself resolved for this
-    /// application (deps.json / runtimes/&lt;rid&gt;/native, the assembly and app directories), never by
-    /// falling back to the operating system's search of a bare name (LD_LIBRARY_PATH, PATH, the
-    /// working directory). A missing or unloadable library fails with the directories that were
-    /// probed instead of silently picking up a library planted elsewhere.
-    /// </summary>
     internal static class NativeLibraryResolver
     {
         internal const string LibraryName = "opaque";
 
-        // CA2255 discourages module initializers in libraries; this is the one case it is meant for:
-        // the resolver must be in place before the first P/Invoke of any entry type, with no init call.
 #pragma warning disable CA2255
         [ModuleInitializer]
 #pragma warning restore CA2255
@@ -32,8 +21,6 @@ namespace OPAQUE.Net.Helpers
             }
             catch (InvalidOperationException)
             {
-                // Someone else registered a resolver for this assembly first. It now decides where the native
-                // library comes from, and the directory restriction above does not apply: say so.
                 System.Diagnostics.Trace.TraceWarning(
                     "OPAQUE.Net: another DllImport resolver is registered for this assembly; the native library is loaded by it, not from the host-resolved directories.");
             }
@@ -42,7 +29,6 @@ namespace OPAQUE.Net.Helpers
         internal static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) =>
             libraryName == LibraryName ? Load(FileName(), CandidateDirectories(assembly)) : IntPtr.Zero;
 
-        // The csproj gives every RID's binary the same canonical name in the output and in runtimes/<rid>/native.
         internal static string FileName() =>
             OperatingSystem.IsWindows() ? "opaque.dll" :
             OperatingSystem.IsMacOS() ? "libopaque.dylib" : "libopaque.so";
@@ -61,7 +47,6 @@ namespace OPAQUE.Net.Helpers
             }
 
             directories.Add(AppContext.BaseDirectory);
-            // A relative entry would be resolved against the current working directory: skip it.
             return directories.Where(Path.IsPathFullyQualified).Distinct().ToList();
         }
 

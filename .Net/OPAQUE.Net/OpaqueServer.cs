@@ -48,7 +48,7 @@ namespace OPAQUE.Net
         /// <param name="serverSetup">String from <see cref="OpaqueServer.CreateSetup(out string?)"/></param>
         /// <param name="userIdentifier">Current user identifier</param>
         /// <param name="registrationRequest"><see cref="StartClientRegistrationResult.RegistrationRequest"/> from <see cref="OpaqueClient.StartRegistration(string, out StartClientRegistrationResult?)"/></param>
-        /// <param name="registrationResponse">The resposne from the registration</param>
+        /// <param name="registrationResponse">The registration response for the client</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool CreateRegistrationResponse(string serverSetup, string userIdentifier, string registrationRequest, out string? registrationResponse)
         {
@@ -71,21 +71,17 @@ namespace OPAQUE.Net
         }
 
         /// <summary>
-        /// Starts the login process for the server and returns the server state sealed under
-        /// <paramref name="serverSetup"/> and bound to <paramref name="userIdentifier"/>. All instances serving
-        /// the same users must share the setup.
+        /// Starts the server login and returns the state sealed under <paramref name="serverSetup"/> and bound to
+        /// <paramref name="userIdentifier"/>. All instances serving the same users must share the setup.
         /// </summary>
         /// <param name="serverSetup">String from <see cref="OpaqueServer.CreateSetup(out string?)"/></param>
         /// <param name="startLoginRequest"><see cref="StartClientLoginResult.StartLoginRequest"/> from the client</param>
         /// <param name="userIdentifier">Current user identifier</param>
         /// <param name="registrationRecord">The user's registration record, or null/empty if the user does not exist.
-        /// A record that cannot be decoded is treated like an absent one: the client gets an ordinary response and
-        /// the login fails at the finish step.</param>
+        /// An absent or undecodable record still gets an ordinary response; the login then fails at the finish step.</param>
         /// <param name="result">A <see cref="StartSealedServerLoginResult"/> filled with data if successful</param>
-        /// <param name="e">An exception thrown while calling into the native library (for example a marshalling fault).
-        /// Native failures, including an undecodable <paramref name="serverSetup"/>, a clock before 1970 or a sealing
-        /// error, return false with this null, like a protocol failure; validate the setup once at startup with
-        /// <see cref="GetPublicKey(string, out string?)"/>.</param>
+        /// <param name="e">Set only when the call into the native library throws. Native failures return false with
+        /// this null; validate the setup at startup with <see cref="GetPublicKey(string, out string?)"/>.</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool StartSealedLogin(string serverSetup, string startLoginRequest, string userIdentifier,
             string? registrationRecord, out StartSealedServerLoginResult? result, out Exception? e)
@@ -93,19 +89,16 @@ namespace OPAQUE.Net
             return StartSealedLogin(serverSetup, startLoginRequest, userIdentifier, registrationRecord, "", "", out result, out e);
         }
 
-        /// <summary>Starts the login process for the server with explicit client and server identifiers, returning the sealed server state.</summary>
+        /// <summary>Starts the server login with explicit client and server identifiers, returning the sealed state.</summary>
         /// <param name="serverSetup">String from <see cref="OpaqueServer.CreateSetup(out string?)"/></param>
         /// <param name="startLoginRequest"><see cref="StartClientLoginResult.StartLoginRequest"/> from the client</param>
         /// <param name="userIdentifier">Current user identifier</param>
         /// <param name="registrationRecord">The user's registration record, or null/empty if the user does not exist</param>
+        /// <param name="clientIdentity">Client identifier; must match the one used at registration</param>
+        /// <param name="serverIdentity">Server identifier; must match the one used at registration</param>
         /// <param name="result">A <see cref="StartSealedServerLoginResult"/> filled with data if successful</param>
-        /// <param name="e">An exception thrown while calling into the native library (for example a marshalling fault).
-        /// Native failures, including an undecodable <paramref name="serverSetup"/>, a clock before 1970 or a sealing
-        /// error, return false with this null, like a protocol failure; validate the setup once at startup with
-        /// <see cref="GetPublicKey(string, out string?)"/>.</param>
+        /// <param name="e">Set only when the call into the native library throws; native failures return false with this null.</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
-        /// <param name="clientIdentity">Current client identifier</param>
-        /// <param name="serverIdentity">Current server identifier</param>
         public bool StartSealedLogin(string serverSetup, string startLoginRequest, string userIdentifier,
             string? registrationRecord, string? clientIdentity, string? serverIdentity, out StartSealedServerLoginResult? result, out Exception? e)
         {
@@ -142,19 +135,16 @@ namespace OPAQUE.Net
             throw new NotSupportedException("Use FinishSealedLogin(serverSetup, userIdentifier, sealedLoginState, finishLoginRequest, tryConsume, out serverSessionKey).");
 
         /// <summary>
-        /// Finishes the login process for the server from a sealed state, once. Fails (false) for a state that
-        /// was tampered with, expired, or produced under another setup or for another user. After the state and the client's finish message verify, <paramref name="tryConsume"/> is called
-        /// once with a stable identifier of the state (SHA-256 hex of the sealed value). It must atomically record
-        /// the identifier and return true only the first time it sees it; on false the login fails and no key is
-        /// returned. Back it with storage shared by all instances (e.g. Redis <c>SET NX</c> with a TTL of at
-        /// least 120 s), or use one process-wide <see cref="LoginStateReplayCache"/> for a single instance.
+        /// Finishes the server login from a sealed state, once. Fails for a state that was tampered with, expired,
+        /// or produced under another setup or for another user.
         /// </summary>
         /// <param name="serverSetup">The same setup passed to <c>StartSealedLogin</c></param>
-        /// <param name="userIdentifier">The user identifier passed to <c>StartSealedLogin</c>. The login succeeds only
-        /// for that exact value, so on success the session belongs to this user.</param>
+        /// <param name="userIdentifier">The user identifier passed to <c>StartSealedLogin</c>; on success the session belongs to this user.</param>
         /// <param name="sealedLoginState"><see cref="StartSealedServerLoginResult.SealedLoginState"/></param>
         /// <param name="finishLoginRequest"><see cref="FinishClientLoginResult.FinishLoginRequest"/> from the client</param>
-        /// <param name="tryConsume">Atomic first-use check, see above</param>
+        /// <param name="tryConsume">Called once, after the state and finish message verify, with a stable id of the state.
+        /// Must atomically record it and return true only the first time: shared storage (e.g. Redis <c>SET NX</c>,
+        /// TTL of at least 120 s) for several instances, or one process-wide <see cref="LoginStateReplayCache"/>.</param>
         /// <param name="serverSessionKey">The generated session key</param>
         /// <returns>True if succeeded, false otherwise. Out parameter will not be null if succeeded</returns>
         public bool FinishSealedLogin(string serverSetup, string userIdentifier, string sealedLoginState, string finishLoginRequest,
@@ -181,8 +171,6 @@ namespace OPAQUE.Net
                 return false;
             }
 
-            // The native base64url decoder is canonical (no padding, no spare bits), so each blob has exactly
-            // one string form and hashing the string cannot be dodged by re-encoding it.
             bool first = false;
             try
             {
@@ -192,7 +180,7 @@ namespace OPAQUE.Net
             {
                 if (!first)
                 {
-                    serverSessionKey = null; // also when tryConsume throws: never hand out an unconsumed key
+                    serverSessionKey = null;
                 }
             }
 
@@ -207,8 +195,6 @@ namespace OPAQUE.Net
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StringHandle create_server_registration_response(byte[] serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string userIdentifier, [MarshalAs(UnmanagedType.LPUTF8Str)] string registrationRequest);
-
-
 
         [DllImport("opaque", CallingConvention = CallingConvention.Cdecl)]
         private static extern StartSealedServerLoginResultHandle start_server_login_sealed(byte[] serverSetup, [MarshalAs(UnmanagedType.LPUTF8Str)] string startLoginRequest,

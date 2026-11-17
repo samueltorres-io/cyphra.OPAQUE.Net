@@ -7,13 +7,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use zeroize::Zeroizing;
 
-// Handles are never-reused tokens that own their result, not addresses: once freed, a handle stays
-// dead even after the allocator gives its memory to a new result of the same or another type, and a
-// token presented as the wrong type finds nothing.
 type Registry = HashMap<usize, Box<dyn Any + Send>>;
 
 static LIVE_RESULT_HANDLES: OnceLock<Mutex<Registry>> = OnceLock::new();
-// ponytail: a usize counter; it would take 2^64 results (2^32 on a 32-bit host) to wrap.
 static NEXT_RESULT_HANDLE: AtomicUsize = AtomicUsize::new(1);
 
 fn live_result_handles() -> MutexGuard<'static, Registry> {
@@ -40,7 +36,6 @@ fn release_result_handle<T: Any>(ptr: *mut T) {
 
 fn with_live_result_handle<T: Any, R>(ptr: *mut T, action: impl FnOnce(&T) -> R) -> Option<R> {
     let handles = live_result_handles();
-    // The registry lock is held until `action` returns, preventing concurrent release.
     handles
         .get(&(ptr as usize))?
         .downcast_ref::<T>()
@@ -51,8 +46,6 @@ macro_rules! result_string {
     ($ptr:expr, $field:ident) => {
         csharp::ffi_boundary(
             || {
-                // Copy the field under the registry lock and build the C string after releasing it,
-                // so the lock every getter and free needs is held only for the copy.
                 with_live_result_handle($ptr, |result| {
                     Zeroizing::new(String::clone(&result.$field))
                 })
@@ -269,8 +262,6 @@ pub extern "C" fn free_finish_client_registration_result(ptr: *mut FinishClientR
 mod tests {
     use super::*;
 
-    // Private types: the other tests run in parallel and allocate the real result types, so a
-    // recycled address could otherwise be handed to them between a free and the next assertion.
     struct Probe(u8);
     #[allow(dead_code)]
     struct OtherProbe;
@@ -280,7 +271,6 @@ mod tests {
         let ptr = into_result_handle(Probe(7));
         assert_eq!(with_live_result_handle(ptr, |p| p.0), Some(7));
 
-        // Same address, wrong type: a no-op, the live Probe must survive.
         release_result_handle::<OtherProbe>(ptr.cast());
         assert_eq!(with_live_result_handle(ptr, |p| p.0), Some(7));
 

@@ -17,8 +17,6 @@ namespace OPAQUE.Net.Types.Handles
 
         protected override string GetValue()
         {
-            // Same inclusive limit as the native side and ParamGuard: up to MaximumNativeStringLength bytes
-            // before the NUL.
             int len = 0;
             while (len <= MaximumNativeStringLength && Marshal.ReadByte(handle, len) != 0)
             {
@@ -30,8 +28,6 @@ namespace OPAQUE.Net.Types.Handles
                 throw new InvalidOperationException("Native string is not NUL-terminated within the supported maximum length.");
             }
 
-            // The buffer may hold a session or export key: wipe this intermediate copy. The returned
-            // string is immutable and cannot be wiped (see docs/security.md).
             byte[] buffer = new byte[len];
             try
             {

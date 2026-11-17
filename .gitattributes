@@ -1,4 +1,4 @@
-# The native libraries are untracked CI build products (see docs/building.md). Mark them binary
+# The native libraries are untracked CI build products (see docs/development/building.md). Mark them binary
 # anyway so a stray one is never line-ending converted or rendered as text in a diff.
 *.so     binary
 *.dll    binary
