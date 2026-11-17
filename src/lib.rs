@@ -11,9 +11,6 @@ use opaque_ke::{
 };
 
 use base64::{engine::general_purpose as b64, Engine as _};
-// generic-array 0.14.9+ deprecates its whole API in favour of 1.x, but opaque-ke 3.0's `Ksf` trait is
-// defined over 0.14 types, so they cannot be avoided until opaque-ke moves. Scoped to the `Ksf` impl
-// (not crate-wide) so deprecations elsewhere still fail the build.
 #[allow(deprecated)]
 use generic_array::{typenum::Unsigned, ArrayLength, GenericArray};
 use zeroize::{Zeroize, Zeroizing};
@@ -24,8 +21,6 @@ use libc::c_char;
 
 mod types;
 
-// Deliberately payload-free: a cause attached here could reach callers and tell an attacker which
-// protocol step rejected their input. Every failure is the same value and becomes an empty result.
 struct Error;
 
 fn protocol_error(_: ProtocolError) -> Error {
@@ -54,12 +49,8 @@ const BASE64: b64::GeneralPurpose = b64::URL_SAFE_NO_PAD;
 const MAX_ENCODED_PROTOCOL_MESSAGE_LEN: usize = csharp::MAX_FFI_STRING_LEN;
 const MAX_PASSWORD_LEN: usize = 1024;
 const MAX_IDENTIFIER_LEN: usize = 1024;
-// draft-irtf-cfrg-opaque-16: Argon2id(S = zeroes(16), p = 4, m = 2^21, t = 1).
 const RFC_DRAFT_MEMORY_KIB: u32 = 1 << 21;
 const MIN_CUSTOM_MEMORY_KIB: u32 = 64 * 1024;
-// The RFC profile is an explicit caller-selected compatibility profile. Custom profiles are
-// capped to a practical per-operation budget so untrusted application configuration cannot turn
-// an authentication request into a multi-gigabyte allocation.
 const MAX_CUSTOM_MEMORY_KIB: u32 = 256 * 1024;
 const MAX_CUSTOM_ITERATIONS: u32 = 10;
 const MAX_CUSTOM_PARALLELISM: u32 = 16;
@@ -71,9 +62,6 @@ impl Ksf for types::CustomKsf {
         mut input: GenericArray<u8, L>,
     ) -> Result<GenericArray<u8, L>, InternalError> {
         let mut output = GenericArray::default();
-        // The Argon2 matrix holds password-derived state, so it is wiped before it is freed rather than
-        // relying on the allocator returning it to the OS (not guaranteed: musl, jemalloc, Windows
-        // heaps, or a process that reuses it). Costs ~25% of the client's login latency (measured).
         let mut memory = vec![argon2::Block::default(); self.argon.params().block_count()];
         let result = self.argon.hash_password_into_with_memory(
             &input,
@@ -82,7 +70,6 @@ impl Ksf for types::CustomKsf {
             &mut memory,
         );
         memory.zeroize();
-        // The input is the OPRF output (a secret); wiping 64 bytes is free.
         input.as_mut_slice().zeroize();
         result.map_err(|_| InternalError::KsfError)?;
         Ok(output)
@@ -188,8 +175,6 @@ fn try_create_identifiers(
     Ok(Some(types::CustomIdentifiers { client, server }))
 }
 
-/// Maps the managed `KSFConfigType` (0 = RFC draft, 1 = memory constrained, 2 = custom); the cost
-/// parameters are read only for the custom profile and are range-checked in `get_custom_ksf`.
 fn try_create_ksf_config(
     kind: i32,
     iterations: u32,
@@ -226,8 +211,6 @@ fn internal_create_server_registration_response(
     let registration_request_bytes = base64_decode(&params.registration_request)?;
     let registration_request =
         RegistrationRequest::deserialize(&registration_request_bytes).map_err(protocol_error)?;
-    // opaque-ke 3.0 accepts trailing bytes only here (voprf `take_ext`); every other message it
-    // parses is exact-size. Require the canonical encoding.
     if registration_request.serialize().len() != registration_request_bytes.len() {
         return Err(Error);
     }
@@ -241,8 +224,6 @@ fn internal_create_server_registration_response(
     Ok(BASE64.encode(registration_response_bytes))
 }
 
-/// Returns the raw server login state and the encoded response. The state is a bearer secret (it
-/// finishes the login without the password), so it never leaves this crate unsealed.
 fn start_server_login_raw(
     setup_bytes: &[u8],
     params: types::StartServerLoginParams,
@@ -253,10 +234,7 @@ fn start_server_login_raw(
 
     let mut rng: OsRng = OsRng;
 
-    // A record that does not decode (corrupt, legacy, placeholder, trailing bytes) takes the same
-    // dummy path as an absent one: failing here instead would tell the client the account exists.
     let registration_record = params.registration_record.as_ref().and_then(|record| {
-        // Exact length, not serialize(): re-encoding the key would add work only real records do.
         let bytes = base64_decode(record).ok().filter(|bytes| {
             bytes.len() == <ServerRegistrationLen<DefaultCipherSuite> as Unsigned>::USIZE
         })?;
@@ -303,7 +281,6 @@ fn finish_server_login_from_bytes(
     Ok(session_key)
 }
 
-/// Starts the server login and seals the state under `server_setup`, bound to `user_identifier`.
 fn internal_start_server_login_sealed(
     params: types::StartServerLoginParams,
     now: u64,
@@ -369,8 +346,6 @@ fn internal_finish_client_login(
         finish_params,
     );
 
-    // A failed finish (wrong password, wrong identifiers, tampered response) is an expected
-    // outcome, reported as an empty result rather than an error so the cause is not exposed.
     let Ok(mut client_login_finish_result) = result else {
         return Ok(types::FinishClientLoginResult::default());
     };
@@ -781,7 +756,6 @@ mod tests {
 
         assert!(try_create_ksf_config(3, 0, 0, 0).is_err());
         assert!(try_create_ksf_config(-1, 0, 0, 0).is_err());
-        // "custom" without values must not fall back to a default: zeros fail the range check.
         let custom = try_create_ksf_config(2, 0, 0, 0).ok().unwrap();
         assert!(get_custom_ksf(custom).is_err());
     }
@@ -831,8 +805,6 @@ mod tests {
         csharp::free_string(handle);
     }
 
-    // ---- protocol round trip and adversarial inputs, driven through the internal API ----
-
     const USER: &str = "user@example.test";
     const PASSWORD: &str = "correct horse battery staple";
     const NOW: u64 = 1_000;
@@ -842,7 +814,6 @@ mod tests {
     }
 
     fn ksf() -> types::KeyStretchingFunctionConfig {
-        // Smallest accepted profile keeps the suite fast.
         custom_ksf(1, MIN_CUSTOM_MEMORY_KIB, 1)
     }
 
@@ -967,7 +938,6 @@ mod tests {
 
     #[test]
     fn unknown_user_still_gets_a_response_but_cannot_finish() {
-        // No record: the server answers with a dummy so existence is not revealed at this step.
         let reg = register(PASSWORD);
         let start = internal_start_client_login(z(PASSWORD)).ok().unwrap();
         let server = server_start(&reg, &start.start_login_request, None)
@@ -1008,7 +978,6 @@ mod tests {
         let (server_a, _client_a) = run();
         let (_server_b, client_b) = run();
 
-        // Replay / cross-session: B's finalization must not complete A's login.
         assert!(server_finish(
             &reg,
             &server_a.server_login_state,
@@ -1033,14 +1002,12 @@ mod tests {
             BASE64.encode(bytes)
         };
 
-        // Flipped finalization MAC.
         assert!(server_finish(
             &reg,
             &server.server_login_state,
             &flip(&client.finish_login_request)
         )
         .is_err());
-        // Flipped server response: client must not derive keys.
         let tampered = client_finish(
             &start.client_login_state,
             &flip(&server.login_response),
@@ -1052,7 +1019,6 @@ mod tests {
     #[test]
     fn hostile_garbage_never_panics_or_succeeds() {
         let reg = register(PASSWORD);
-        // Deterministic xorshift: reproducible, no extra dependency.
         let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
         let mut next = move || {
             x ^= x << 13;
@@ -1087,8 +1053,6 @@ mod tests {
         assert!(server_start(&reg, "!!!", Some(&reg.record)).is_err());
         assert!(internal_get_server_public_key("").is_err());
     }
-
-    // ---- FFI boundary ----
 
     #[test]
     fn ffi_boundary_contains_panics() {
@@ -1173,7 +1137,6 @@ mod tests {
         )
         .is_err());
         assert!(finish(&other.setup, &server.server_login_state, 1_000).is_err());
-        // A valid state and finish message of USER do not complete a login for anyone else.
         assert!(internal_finish_server_login_sealed(
             &reg.setup,
             "victim@example.test",

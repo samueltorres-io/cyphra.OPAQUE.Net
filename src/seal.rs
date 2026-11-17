@@ -1,19 +1,3 @@
-//! Authenticated encryption of the serialized server login state.
-//!
-//! The raw `ServerLogin` state holds the session key and the MAC key that verifies the client's
-//! finish message, so whoever sees it can finish the login without the password. Sealing it with a
-//! key only the server knows makes it safe to keep in any server-side store (it is still not meant
-//! for the client), keeps the server stateless, and bounds replay with an expiry that is
-//! authenticated together with the state.
-//!
-//! Layout: `version(1) || nonce(24) || XChaCha20-Poly1305(expiry_be(8) || state)`, with
-//! `version || user_identifier` as associated data. The user identifier is authenticated but not
-//! stored, so a state opens only for the user it was started for: a valid state and finish message
-//! of one account cannot be presented as another account's login. The key is HKDF-SHA512 of the
-//! server setup, so there is no extra secret to configure. It cannot be rotated on its own: a new
-//! setup also carries a new OPRF seed and server key pair, so it invalidates every registration
-//! record, not just the logins in flight.
-
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use hkdf::Hkdf;
@@ -21,24 +5,16 @@ use opaque_ke::rand::{rngs::OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::Zeroizing;
 
-// 2: the user identifier joined the associated data. Version 1 states are refused.
 const VERSION: u8 = 2;
 const KDF_INFO: &[u8] = b"cyphra-opaque/login-state/v1";
 const NONCE_LEN: usize = 24;
 const EXPIRY_LEN: usize = 8;
-// ponytail: fixed window; it must cover client-side Argon2 plus the network round trip. Make it a
-// parameter if a deployment needs longer.
 pub const STATE_TTL_SECS: u64 = 120;
-// Expiry is checked against the local wall clock, so instances must agree on the time (NTP). A state
-// whose expiry lies more than TTL + this skew ahead was sealed by a clock that runs ahead or has since
-// stepped back; it is refused instead of living longer than the TTL.
 const MAX_CLOCK_SKEW_SECS: u64 = 30;
 
 #[derive(Debug)]
 pub struct SealError;
 
-/// Fails (instead of substituting 0) when the clock reads before 1970: 0 would satisfy every
-/// `now <= expiry` check and silently disable expiry.
 pub fn unix_now() -> Result<u64, SealError> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -82,8 +58,6 @@ pub fn seal(setup: &[u8], user: &[u8], state: &[u8], now: u64) -> Result<Vec<u8>
     Ok(out)
 }
 
-/// Returns the raw state only if the blob is authentic, was sealed under this setup for this user
-/// and has not expired. Every failure is the same error so callers cannot tell the causes apart.
 pub fn open(
     setup: &[u8],
     user: &[u8],
@@ -150,7 +124,7 @@ mod tests {
         assert!(open(SETUP, USER, &[], 1_000).is_err());
         assert!(open(SETUP, USER, &sealed[..1 + NONCE_LEN], 1_000).is_err());
         let mut wrong_version = sealed.clone();
-        wrong_version[0] = 1; // a version 1 state carries no user binding
+        wrong_version[0] = 1;
         assert!(open(SETUP, USER, &wrong_version, 1_000).is_err());
     }
 

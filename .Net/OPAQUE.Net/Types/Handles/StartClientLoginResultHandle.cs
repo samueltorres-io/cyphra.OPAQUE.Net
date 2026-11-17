@@ -1,7 +1,6 @@
 ﻿using OPAQUE.Net.Types.Results;
 using System.Runtime.InteropServices;
 
-
 namespace OPAQUE.Net.Types.Handles
 {
     internal sealed class StartClientLoginResultHandle : BaseHandle<StartClientLoginResult>

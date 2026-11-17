@@ -355,17 +355,13 @@ namespace Test
             Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.StartSealedLogin("", "Value", "Value", null, null, null, out _, out _));
             Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "", "Value", null, null, null, out _, out _));
             Assert.ThrowsExactly<StringParamIsEmptyException>(() => server.StartSealedLogin("Value", "Value", "", null, null, null, out _, out _));
-
         }
-
-        // ---- adversarial and failure-mode coverage ----
 
         private const string User = "adversarial-user";
         private const string Password = "correct horse battery staple";
 
         private static string Flip(string base64Url)
         {
-            // Flip one bit in the middle of the decoded payload; stays valid base64url.
             string padded = base64Url.Replace('-', '+').Replace('_', '/');
             padded = padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
             byte[] bytes = Convert.FromBase64String(padded);
@@ -406,7 +402,6 @@ namespace Test
             Assert.IsTrue(server.CreateSetup(out string? setup));
             Assert.IsTrue(client.StartLogin(Password, out StartClientLoginResult? start));
 
-            // No registration record: the server must still answer (no user enumeration here).
             Assert.IsTrue(server.StartSealedLogin(setup!, start!.StartLoginRequest, "nobody", null, out StartSealedServerLoginResult? response, out _));
             Assert.IsFalse(client.FinishLogin(start.ClientLoginState, response!.LoginResponse, Password, out FinishClientLoginResult? result));
             Assert.IsNull(result);
@@ -473,7 +468,6 @@ namespace Test
         public void LengthLimitIsMeasuredInUtf8Bytes()
         {
             var client = new OpaqueClient();
-            // 342 CJK chars = 1026 bytes: used to return a silent false.
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('\u4e2d', 342), out _));
             Assert.IsTrue(client.StartRegistration(new string('\u4e2d', 341), out _));
         }
@@ -484,7 +478,6 @@ namespace Test
             var client = new OpaqueClient();
             Assert.IsTrue(client.StartRegistration(new string('p', 1024), out _));
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => client.StartRegistration(new string('p', 1025), out _));
-            // Valid surrogate pairs (4 bytes each) and NFD text are legitimate; 256 emoji = 1024 bytes.
             Assert.IsTrue(client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 256)), out _));
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => client.StartRegistration(string.Concat(Enumerable.Repeat("\U0001F600", 257)), out _));
             Assert.IsTrue(client.StartRegistration("cafe\u0301", out _));
@@ -622,7 +615,6 @@ namespace Test
             SealedLogin(setup, record, out StartSealedServerLoginResult server, out FinishClientLoginResult client);
             var s = new OpaqueServer();
 
-            // A valid state and finish message of User must not complete a login claimed for another account.
             Assert.IsFalse(s.FinishSealedLogin(setup, "victim", server.SealedLoginState, client.FinishLoginRequest, _ => true, out string? key));
             Assert.IsNull(key);
             Assert.IsTrue(s.FinishSealedLogin(setup, User, server.SealedLoginState, client.FinishLoginRequest, _ => true, out key));
@@ -659,14 +651,12 @@ namespace Test
             var c = new OpaqueClient();
             var s = new OpaqueServer();
 
-            // Matching identifiers: both sides agree.
             Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start));
             Assert.IsTrue(s.StartSealedLogin(setup, start!.StartLoginRequest, User, record, clientId, serverId, out StartSealedServerLoginResult? ok, out _));
             Assert.IsTrue(c.FinishLogin(start.ClientLoginState, ok!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? finished));
             Assert.IsTrue(s.FinishSealedLogin(setup, User, ok.SealedLoginState, finished!.FinishLoginRequest, _ => true, out string? key));
             Assert.AreEqual(finished.SessionKey, key);
 
-            // The server answering under another identity must not yield keys on the client.
             Assert.IsTrue(c.StartLogin(Password, out StartClientLoginResult? start2));
             Assert.IsTrue(s.StartSealedLogin(setup, start2!.StartLoginRequest, User, record, clientId, "server-2", out StartSealedServerLoginResult? bad, out _));
             Assert.IsFalse(c.FinishLogin(start2.ClientLoginState, bad!.LoginResponse, Password, clientId, serverId, null, out FinishClientLoginResult? none));
@@ -741,7 +731,6 @@ namespace Test
             Assert.AreEqual(KSFConfigType.MemoryConstrained, named.Type);
             Assert.IsNull(named.Iterations);
             Assert.AreEqual(KSFConfigType.RfcDraftRecommended, KSFConfig.CreateRfcDraftRecommended(true).Type);
-            // The native side maps these exact values.
             Assert.AreEqual(0, (int)KSFConfigType.RfcDraftRecommended);
             Assert.AreEqual(1, (int)KSFConfigType.MemoryConstrained);
             Assert.AreEqual(2, (int)KSFConfigType.Custom);

@@ -10,12 +10,6 @@ namespace OPAQUE.Net.Types.Exceptions
 
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
-        /// <summary>
-        /// Rejects what the native boundary would silently alter: embedded NUL (truncates the value),
-        /// unpaired surrogates (replaced by U+FFFD) and anything over <paramref name="maximumBytes"/>
-        /// UTF-8 bytes, the unit the native side enforces. No Unicode normalization is applied.
-        /// A <paramref name="required"/> value must also be non-empty.
-        /// </summary>
         public static void ThrowIfInvalid(string? value, int maximumBytes, string paramName, bool required = false)
         {
             if (string.IsNullOrEmpty(value))
@@ -29,7 +23,6 @@ namespace OPAQUE.Net.Types.Exceptions
 
             if (value.Length > maximumBytes)
             {
-                // Every char takes at least one UTF-8 byte, so this is too long without encoding it.
                 throw TooLong(paramName, maximumBytes);
             }
 
@@ -54,10 +47,6 @@ namespace OPAQUE.Net.Types.Exceptions
             }
         }
 
-        /// <summary>
-        /// NUL-terminated UTF-8 for a secret argument. A <c>byte[]</c> parameter is pinned and passed as is, so
-        /// unlike <c>LPUTF8Str</c> no unmanaged copy is left unwiped: zero the array after the call.
-        /// </summary>
         public static byte[] ToNativeUtf8(string value)
         {
             byte[] bytes = new byte[StrictUtf8.GetByteCount(value) + 1];

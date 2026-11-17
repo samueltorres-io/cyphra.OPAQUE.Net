@@ -75,7 +75,6 @@
         }
     }
 
-    // The numeric values cross the native boundary: do not reorder.
     public enum KSFConfigType
     {
         RfcDraftRecommended = 0,

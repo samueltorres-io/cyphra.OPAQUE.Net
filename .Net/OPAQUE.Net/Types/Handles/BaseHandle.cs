@@ -12,7 +12,6 @@ namespace OPAQUE.Net.Types.Handles
         {
             try
             {
-                // NULL is the native side's failure result: never pass it to the getters.
                 return IsInvalid ? default : GetValue();
             }
             finally
@@ -21,7 +20,6 @@ namespace OPAQUE.Net.Types.Handles
             }
         }
 
-        // SafeHandle never calls this for an invalid handle.
         protected override bool ReleaseHandle()
         {
             DoRelease();

@@ -9,9 +9,6 @@ pub const MAX_FFI_STRING_LEN: usize = 64 * 1024;
 
 static LIVE_STRING_HANDLES: OnceLock<Mutex<HashSet<usize>>> = OnceLock::new();
 
-/// Locks a handle registry, recovering from poisoning. A panic while the guard is held cannot leave
-/// a `HashSet` of addresses in a state that matters, whereas treating poison as fatal would make
-/// every later call fail for the rest of the process.
 pub(crate) fn lock_registry<T>(registry: &Mutex<T>) -> MutexGuard<'_, T> {
     registry.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -41,13 +38,10 @@ pub fn csharp_string_to_rust_string(s: *const c_char) -> Result<Zeroizing<String
         return Err(FfiStringError::Null);
     }
 
-    // C callers must provide a readable pointer. A raw pointer alone cannot be proven valid in
-    // portable Rust, but strnlen prevents an unterminated value from causing an unbounded scan.
     let len = unsafe { libc::strnlen(s, MAX_FFI_STRING_LEN + 1) };
     if len > MAX_FFI_STRING_LEN {
         return Err(FfiStringError::TooLong);
     }
-    // strnlen stopped at a NUL within the bound, so these `len` bytes are readable and NUL-free.
     let bytes = unsafe { std::slice::from_raw_parts(s.cast::<u8>(), len) };
     let value = std::str::from_utf8(bytes).map_err(|_| FfiStringError::InvalidUtf8)?;
     Ok(Zeroizing::new(value.to_owned()))
@@ -66,7 +60,6 @@ pub extern "C" fn free_string(s: *mut c_char) {
     if live_string_handles().remove(&(s as usize)) {
         ffi_boundary(
             || {
-                // Strings handed to C# may carry session keys or export keys: wipe before freeing.
                 let mut bytes = unsafe { CString::from_raw(s) }.into_bytes();
                 bytes.zeroize();
             },

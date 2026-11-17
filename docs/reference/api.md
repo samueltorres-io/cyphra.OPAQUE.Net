@@ -45,11 +45,15 @@ Identifiers and `KSFConfig` must be identical at registration and login, or logi
 
 - Fails for a state that was altered, expired (2 minutes), sealed under another setup, or started for another `userIdentifier`, so a success authenticates exactly that user.
 - `tryConsume` receives a stable id of the state (SHA-256 hex of the sealed value) and must atomically record it and return `true` only the first time. Use shared storage such as Redis `SET NX` with a TTL of at least 120 s for several instances, or [`LoginStateReplayCache.TryConsume`](#loginstatereplaycache) for a single instance. It runs only after the state and the finish message verify, so a bad finish message does not burn the state.
+- The native base64url decoding is canonical (no padding, no spare bits), so each sealed state has exactly one string form and re-encoding it cannot produce a fresh id.
+- If `tryConsume` returns `false` or throws, no session key is returned (`serverSessionKey` is null); an exception propagates to the caller.
 - The overloads without `userIdentifier` are `[Obsolete(error: true)]` (compile error) and throw `NotSupportedException`.
 
 ## `LoginStateReplayCache`
 
-`TryConsume(id)` returns `true` the first time an id is seen and `false` afterwards, for 5 minutes (longer than a sealed state lives). It is thread-safe and in-memory, so it is correct only for a single server instance and forgets everything on restart. Create one per process (a static field or a DI singleton). For several instances or restarts, use shared storage with an atomic set-if-absent. Pass `TryConsume` as the `tryConsume` argument of `FinishSealedLogin`.
+`TryConsume(id)` returns `true` the first time an id is seen and `false` afterwards, for 5 minutes (longer than a sealed state lives, to cover clock skew). It is thread-safe and in-memory, so it is correct only for a single server instance and forgets everything on restart.
+
+Retention follows the wall clock on purpose, the same clock the native library uses to expire states: a backward clock step keeps ids longer instead of dropping them while a state is still valid. Expired ids are swept at most once a minute, so `TryConsume` stays O(1) amortized. Create one per process (a static field or a DI singleton). For several instances or restarts, use shared storage with an atomic set-if-absent. Pass `TryConsume` as the `tryConsume` argument of `FinishSealedLogin`.
 
 ## Result objects
 
