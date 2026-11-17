@@ -509,10 +509,20 @@ namespace Test
         }
   
         [TestMethod]
-        public void SealedLoginStateIsNotRevealedByToString()
+        public void ResultsDoNotRevealSecretsInToString()
         {
-            var result = new StartSealedServerLoginResult("SECRET-STATE", "response");
-            StringAssert.DoesNotMatch(result.ToString()!, new System.Text.RegularExpressions.Regex("SECRET-STATE"));
+            object[] results =
+            [
+                new StartSealedServerLoginResult("SECRET", "SECRET"),
+                new StartClientRegistrationResult("SECRET", "SECRET"),
+                new FinishClientRegistrationResult("SECRET", "SECRET", "SECRET"),
+                new StartClientLoginResult("SECRET", "SECRET"),
+                new FinishClientLoginResult("SECRET", "SECRET", "SECRET", "SECRET"),
+            ];
+            foreach (var result in results)
+            {
+                Assert.AreEqual(result.GetType().Name, result.ToString());
+            }
         }
   
         private static void SealedLogin(string setup, string record, out StartSealedServerLoginResult server, out FinishClientLoginResult client)
