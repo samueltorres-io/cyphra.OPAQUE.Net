@@ -1,5 +1,5 @@
 # Zig (the cross-linker for the glibc 2.17 builds) and cargo-zigbuild. Installed with --require-hashes so a
-# replaced or tampered PyPI file fails the build. Hashes are for the linux x86_64 and aarch64 wheels.
+# replaced or tampered PyPI file fails the build. Dependabot pins the hashes of every published wheel; CI installs the linux ones.
 ziglang==0.17.1 \
     --hash=sha256:09953b6af7f64168b915180a42774f520f92d86ef6331b28e33915c7e1f0bb23 \
     --hash=sha256:27a8da5f8eaa0e76ebbc7c2594130ed4646c1101ada2ce0aa86fe580c74154b9 \
